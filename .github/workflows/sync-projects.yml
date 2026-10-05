@@ -1,0 +1,45 @@
+name: Sync Projects (cron fallback)
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # daily 02:00 UTC = 09:00 WIB
+  workflow_dispatch:
+  repository_dispatch:
+    types: [portfolio-sync]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install
+
+      - name: Run sync-from-github
+        env:
+          GITHUB_READ_USER_TOKEN_PERSONAL: ${{ secrets.GITHUB_READ_USER_TOKEN_PERSONAL }}
+          GITHUB_USERNAME: satriabahari
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-1.5-flash
+          PORTFOLIO_GITHUB_TOKEN: ${{ secrets.GITHUB_READ_USER_TOKEN_PERSONAL }}
+          PORTFOLIO_REPO: satriabahari/satriabahari.my.id
+        run: bun run scripts/sync-from-github.ts
+
+      - name: Upload sync log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-log
+          path: logs/sync-*.json
+          if-no-files-found: ignore
