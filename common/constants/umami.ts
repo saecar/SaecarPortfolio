@@ -6,11 +6,13 @@ export const UMAMI_ACCOUNT = {
     page_views: "/pageviews",
     sessions: "/sessions/stats",
   },
-  parameters: {
-    startAt: 1717174800000, // 1 Juni 2024 00:00 WIB
-    endAt: 1767190799000, // 31 Desember 2025 23:59 WIB
-    unit: "month",
-    timezone: "Asia/Jakarta",
+  get parameters() {
+    return {
+      startAt: 1717174800000, // 1 Juni 2024 00:00 WIB
+      endAt: Date.now(), // Current date
+      unit: "month",
+      timezone: "Asia/Jakarta",
+    };
   },
   is_active: true,
   websites: [

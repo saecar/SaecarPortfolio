@@ -90,7 +90,10 @@ const RootLayout = async ({
         <Analytics />
         <Script
           src="https://cloud.umami.is/script.js"
-          data-website-id="91c868c5-2a89-4a1d-b292-56c40ea30137"
+          data-website-id={
+            process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID ||
+            "91c868c5-2a89-4a1d-b292-56c40ea30137"
+          }
           strategy="lazyOnload"
         />
       </body>

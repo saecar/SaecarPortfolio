@@ -5,12 +5,26 @@ import { unstable_cache } from "next/cache";
 const { api_key, base_url, all_time_endpoint, stats_endpoint } =
   WAKATIME_ACCOUNT;
 
+const getAuthHeader = (key?: string) => {
+  if (!key) return "";
+  const cleanKey = key.startsWith("Basic ") ? key.slice(6).trim() : key.trim();
+  const isBase64 =
+    /^[A-Za-z0-9+/]+={0,2}$/.test(cleanKey) &&
+    cleanKey.length % 4 === 0 &&
+    !cleanKey.startsWith("waka_") &&
+    !cleanKey.includes("-");
+  const encoded = isBase64
+    ? cleanKey
+    : Buffer.from(cleanKey).toString("base64");
+  return `Basic ${encoded}`;
+};
+
 const fetchReadStats = async () => {
   try {
     const response = await axios.get(
       `${base_url}${stats_endpoint}/last_7_days`,
       {
-        headers: { Authorization: `Basic ${api_key}` },
+        headers: { Authorization: getAuthHeader(api_key) },
       },
     );
 
@@ -41,7 +55,7 @@ const fetchReadStats = async () => {
 const fetchAllTimeSinceToday = async () => {
   try {
     const response = await axios.get(`${base_url}${all_time_endpoint}`, {
-      headers: { Authorization: `Basic ${api_key}` },
+      headers: { Authorization: getAuthHeader(api_key) },
     });
 
     const getData = response.data;
