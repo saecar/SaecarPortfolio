@@ -13,52 +13,61 @@ export const getAchievementsData = async ({
   category,
   search,
 }: GetAchievementsDataProps) => {
-  const supabase = createClient();
+  try {
+    const supabase = createClient();
 
-  let query = supabase.from("achievements").select();
+    let query = supabase.from("achievements").select();
 
-  if (category) query = query.eq("category", category);
-  if (search) query = query.ilike("name", `%${search}%`);
+    if (category) query = query.eq("category", category);
+    if (search) query = query.ilike("name", `%${search}%`);
 
-  const { data, error } = await query;
+    const { data, error } = await query;
 
-  if (error) throw new Error(error.message);
-  if (!data) return [];
+    if (error || !data) return [];
 
-  return data.map((item) => {
-    const { data: imageData } = supabase.storage
-      .from("achievements")
-      .getPublicUrl(`${item.slug}.webp`);
+    return data.map((item) => {
+      const { data: imageData } = supabase.storage
+        .from("achievements")
+        .getPublicUrl(`${item.slug}.webp`);
 
-    return {
-      ...item,
-      image: imageData.publicUrl,
-    };
-  });
+      return {
+        ...item,
+        image: imageData.publicUrl,
+      };
+    });
+  } catch {
+    return [];
+  }
 };
 
 export const getAchivementTypes = async () => {
-  const supabase = createClient();
+  try {
+    const supabase = createClient();
 
-  const { data, error } = await supabase.rpc("get_enum_values", {
-    type_name: "achievement_type",
-  });
+    const { data, error } = await supabase.rpc("get_enum_values", {
+      type_name: "achievement_type",
+    });
 
-  if (error) throw new Error(error.message);
-  if (!data) return [];
+    if (error || !data) return ["Certificate", "Award", "Course"];
 
-  return data.map((item: EnumItem) => item.enum_value);
+    return data.map((item: EnumItem) => item.enum_value);
+  } catch {
+    return ["Certificate", "Award", "Course"];
+  }
 };
 
 export const getAchivementCategories = async () => {
-  const supabase = createClient();
+  try {
+    const supabase = createClient();
 
-  const { data, error } = await supabase.rpc("get_enum_values", {
-    type_name: "achievement_category",
-  });
+    const { data, error } = await supabase.rpc("get_enum_values", {
+      type_name: "achievement_category",
+    });
 
-  if (error) throw new Error(error.message);
-  if (!data) return [];
+    if (error || !data) return ["Tech", "Education", "Competition"];
 
-  return data.map((item: EnumItem) => item.enum_value);
+    return data.map((item: EnumItem) => item.enum_value);
+  } catch {
+    return ["Tech", "Education", "Competition"];
+  }
 };
