@@ -17,20 +17,33 @@ export const loadMdxFiles = (): MdxFileProps[] => {
 
   const files = fs.readdirSync(dirPath);
 
-  const contents = files.map((file) => {
-    const filePath = path.join(dirPath, file);
-    const source = fs.readFileSync(filePath, "utf-8");
-    const { content, data } = matter(source);
+  const contents = files
+    .map((file) => {
+      try {
+        const filePath = path.join(dirPath, file);
+        const source = fs.readFileSync(filePath, "utf-8");
+        const { content, data } = matter(source);
 
-    const mdxCompiler = remark().use(remarkParse).use(remarkGfm).use(remarkMdx);
-    const mdxContent = mdxCompiler.processSync(content).toString();
+        let mdxContent = content;
+        try {
+          const mdxCompiler = remark().use(remarkParse).use(remarkGfm).use(remarkMdx);
+          mdxContent = mdxCompiler.processSync(content).toString();
+        } catch {
+          const safeCompiler = remark().use(remarkParse).use(remarkGfm);
+          mdxContent = safeCompiler.processSync(content).toString();
+        }
 
-    return {
-      slug: file.replace(".mdx", ""),
-      frontMatter: data,
-      content: mdxContent,
-    };
-  });
+        return {
+          slug: file.replace(".mdx", ""),
+          frontMatter: data,
+          content: mdxContent,
+        };
+      } catch (err: any) {
+        console.warn(`[MDX] Failed reading ${file}:`, err.message);
+        return null;
+      }
+    })
+    .filter((item): item is MdxFileProps => Boolean(item));
 
   return contents;
 };

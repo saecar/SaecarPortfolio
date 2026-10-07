@@ -441,7 +441,9 @@ Catatan Penting:
 
     // Sanitasi: strip wrapping ```markdown or ```
     text = text.replace(/^```markdown\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/g, "");
-    const sanitized = text.replace(/<script[\s\S]*?<\/script>/gi, "");
+    let sanitized = text.replace(/<script[\s\S]*?<\/script>/gi, "");
+    // Ensure all <img> tags are valid self-closing JSX
+    sanitized = sanitized.replace(/<img([^>]*?)(?<!\/)>/gi, "<img$1 />");
 
     // Ambil deskripsi dari blockquote pertama atau baris pertama non-heading
     const lines = sanitized.split("\n");
@@ -474,4 +476,165 @@ Catatan Penting:
     console.error("[readme-template] Gemini API note (falling back to template):", msg);
     return fallbackReadme(options);
   }
+}
+
+export interface GenerateApiReadmeOptions {
+  name: string;
+  slug: string;
+  baseUrlLocal?: string;
+  baseUrlProd?: string;
+  stacks?: string[];
+  backendSnippet?: string;
+  descriptionHint?: string;
+}
+
+export async function generateApiReadme(options: GenerateApiReadmeOptions): Promise<string> {
+  const {
+    name,
+    slug,
+    baseUrlLocal = "http://localhost:5000",
+    baseUrlProd = `https://api-${slug}.onrender.com`,
+    stacks = ["Node.js", "Express", "REST API"],
+    backendSnippet,
+    descriptionHint,
+  } = options;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "your_gemini_api_key") {
+    return fallbackApiReadme(options);
+  }
+
+  const prompt = `Anda adalah Backend Architect & Technical Writer senior.
+Buatlah dokumentasi API lengkap dan profesional berformat Markdown murni (untuk file API.md) untuk proyek berikut:
+
+- Nama Layanan: ${name} API
+- Slug: ${slug}
+- Base URL Lokal: ${baseUrlLocal}
+- Base URL Production: ${baseUrlProd}
+- Tech Stack: ${stacks.join(", ")}
+- Deskripsi: ${descriptionHint || "RESTful Web API Service"}
+${backendSnippet ? `\n--- KODE SUMBER BACKEND (ROUTES / CONTROLLERS) ---\n${backendSnippet.slice(0, 8000)}\n` : ""}
+
+STRUKTUR DOKUMENTASI WAJIB:
+1. # ${name} API Reference
+2. Blockquote ringkasan fungsionalitas
+3. ## 🌐 Base URL (Tabel Environment Development & Production)
+4. ## 🔐 Autentikasi (Format header Bearer Token / API Key, contoh Authorization header)
+5. ## 📋 Daftar Endpoint (Tabel: Method, Path, Keterangan, Auth)
+6. ## 🔍 Detail Spesifikasi Endpoint (Setiap endpoint utama memiliki Method, Path, Headers, Query Params / Body JSON, Response 200/201 JSON, Response 400/401/404/500 JSON, dan contoh perintah cURL)
+7. ## ⚠️ Kode Error & Penanganan
+
+ATURAN FORMAT:
+- Berikan HANYA teks markdown langsung tanpa membungkus dengan backticks \`\`\`markdown di awal/akhir.
+- Semua tag <img> harus self-closing <img ... /> jika ada.
+- Gunakan bahasa Indonesia profesional dan terminologi teknis baku.`;
+
+  try {
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const res = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 3000,
+        },
+      },
+      { signal: AbortSignal.timeout(25000) }
+    );
+
+    let text: string = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!text.trim()) return fallbackApiReadme(options);
+
+    text = text.replace(/^```markdown\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/g, "");
+    text = text.replace(/<img([^>]*?)(?<!\/)>/gi, "<img$1 />");
+    return text.trim();
+  } catch (err: unknown) {
+    return fallbackApiReadme(options);
+  }
+}
+
+export function fallbackApiReadme(options: GenerateApiReadmeOptions): string {
+  const {
+    name,
+    baseUrlLocal = "http://localhost:5000",
+    baseUrlProd = "https://api.example.com",
+  } = options;
+
+  return `# ${name} API Reference
+
+> Dokumentasi antarmuka pemrograman aplikasi (RESTful API) untuk layanan ${name}.
+
+---
+
+## 🌐 Base URL
+
+| Environment | URL | Keterangan |
+| :--- | :--- | :--- |
+| **Development** | \`${baseUrlLocal}\` | Server pengembangan lokal |
+| **Production** | \`${baseUrlProd}\` | Server produksi live |
+
+---
+
+## 🔐 Autentikasi
+
+Semua permintaan ke endpoint terproteksi wajib menyertakan header **Bearer Token**:
+
+\`\`\`http
+Authorization: Bearer <token_akses_anda>
+Content-Type: application/json
+Accept: application/json
+\`\`\`
+
+---
+
+## 📋 Daftar Endpoint Utama
+
+| Method | Endpoint | Deskripsi | Auth |
+| :---: | :--- | :--- | :---: |
+| \`GET\` | \`/api/health\` | Pengecekan status dan uptime server | Publik |
+| \`GET\` | \`/api/v1/data\` | Mendapatkan seluruh daftar data | Wajib |
+| \`POST\` | \`/api/v1/data\` | Membuat data baru | Wajib |
+| \`GET\` | \`/api/v1/data/:id\` | Mendapatkan detail data berdasarkan ID | Wajib |
+| \`PUT\` | \`/api/v1/data/:id\` | Memperbarui data yang ada | Wajib |
+| \`DELETE\` | \`/api/v1/data/:id\` | Menghapus entri data | Wajib |
+
+---
+
+## 📦 Format Respons Standar
+
+### Respons Sukses (HTTP 200 / 201)
+\`\`\`json
+{
+  "success": true,
+  "message": "Permintaan berhasil diproses",
+  "data": {}
+}
+\`\`\`
+
+### Respons Kesalahan (HTTP 400 / 401 / 404 / 500)
+\`\`\`json
+{
+  "success": false,
+  "error": {
+    "code": "RESOURCE_NOT_FOUND",
+    "message": "Data yang diminta tidak ditemukan"
+  }
+}
+\`\`\`
+
+---
+
+## 🧪 Contoh Pengujian dengan cURL
+
+\`\`\`bash
+# 1. Pengecekan Server Health
+curl -X GET "${baseUrlLocal}/api/health"
+
+# 2. Mengambil data dengan Authorization
+curl -X GET "${baseUrlLocal}/api/v1/data" \\
+  -H "Authorization: Bearer YOUR_TOKEN" \\
+  -H "Accept: application/json"
+\`\`\`
+`;
 }

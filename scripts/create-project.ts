@@ -12,8 +12,9 @@ import path from "path";
 import readline from "readline";
 import { execSync } from "child_process";
 import axios from "axios";
-import { generateReadme, ProjectCategory } from "../common/libs/readme-template";
+import { generateReadme, generateApiReadme, ProjectCategory } from "../common/libs/readme-template";
 import { createServiceClient } from "../common/utils/supabase-service";
+import sharp from "sharp";
 
 // Load environment variables if not already loaded
 if (!process.env.GEMINI_API_KEY && fs.existsSync(path.join(process.cwd(), ".env"))) {
@@ -249,7 +250,7 @@ async function triggerVercelDeploy(projectName: string, repoFullName: string): P
   }
 
   try {
-    console.log(`⚡ Mengintegrasikan dengan Vercel...`);
+    console.log(`⚡ Mengintegrasikan Frontend dengan Vercel...`);
     const headers = {
       Authorization: `Bearer ${VERCEL_TOKEN}`,
       "Content-Type": "application/json",
@@ -268,12 +269,204 @@ async function triggerVercelDeploy(projectName: string, repoFullName: string): P
       { headers }
     );
 
-    console.log(`✅ Berhasil menghubungkan project ke Vercel!`);
+    console.log(`✅ Berhasil menghubungkan Frontend ke Vercel!`);
     return `https://${projectName}.vercel.app`;
   } catch (err: any) {
     console.warn("⚠️ Vercel API response:", err.response?.data?.error?.message || err.message);
     return `https://${projectName}.vercel.app`;
   }
+}
+
+async function triggerBackendDeploy({
+  platform,
+  slug,
+  repoFullName,
+  deployUrl,
+}: {
+  platform: "render" | "railway" | "vercel" | "custom";
+  slug: string;
+  repoFullName: string;
+  deployUrl?: string;
+}): Promise<string | null> {
+  console.log(`⚡ Menginisialisasi deployment Backend (${platform.toUpperCase()})...`);
+
+  if (platform === "render") {
+    const hook = deployUrl || process.env.RENDER_DEPLOY_HOOK;
+    if (hook) {
+      try {
+        await axios.post(hook);
+        console.log(`✅ Berhasil memicu deploy hook Render!`);
+      } catch (e: any) {
+        console.warn(`⚠️ Render deploy hook response:`, e.message);
+      }
+    }
+    return `https://${slug}.onrender.com`;
+  }
+
+  if (platform === "railway") {
+    const hook = deployUrl || process.env.RAILWAY_DEPLOY_WEBHOOK;
+    if (hook) {
+      try {
+        await axios.post(hook);
+        console.log(`✅ Berhasil memicu webhook Railway!`);
+      } catch (e: any) {
+        console.warn(`⚠️ Railway webhook response:`, e.message);
+      }
+    }
+    return `https://${slug}.up.railway.app`;
+  }
+
+  if (platform === "vercel") {
+    return await triggerVercelDeploy(`${slug}-api`, repoFullName);
+  }
+
+  if (platform === "custom" && deployUrl) {
+    try {
+      await axios.post(deployUrl);
+      console.log(`✅ Berhasil memicu custom webhook!`);
+    } catch (e: any) {
+      console.warn(`⚠️ Custom webhook response:`, e.message);
+    }
+    return deployUrl;
+  }
+
+  return null;
+}
+
+function scanBackendSourceFiles(projectPath: string): { files: string[]; snippet: string } {
+  const extensions = [".js", ".ts", ".py", ".go", ".json"];
+  const targetFiles: string[] = [];
+
+  function walk(dir: string, depth = 0) {
+    if (depth > 4) return;
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (
+          entry.name.startsWith(".") ||
+          entry.name === "node_modules" ||
+          entry.name === "dist" ||
+          entry.name === "build" ||
+          entry.name === ".git"
+        ) {
+          continue;
+        }
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full, depth + 1);
+        } else if (entry.isFile()) {
+          const lower = entry.name.toLowerCase();
+          const ext = path.extname(lower);
+          if (
+            extensions.includes(ext) &&
+            (lower.includes("route") ||
+              lower.includes("controller") ||
+              lower.includes("api") ||
+              lower.includes("handler") ||
+              lower.includes("server") ||
+              lower === "main.py" ||
+              lower === "app.py" ||
+              lower === "main.go" ||
+              lower.includes("openapi") ||
+              lower.includes("swagger"))
+          ) {
+            targetFiles.push(full);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  walk(projectPath);
+
+  if (targetFiles.length === 0) return { files: [], snippet: "" };
+
+  let combined = "";
+  for (const file of targetFiles.slice(0, 8)) {
+    try {
+      const rel = path.relative(projectPath, file);
+      const content = fs.readFileSync(file, "utf-8");
+      combined += `\n--- FILE: ${rel} ---\n${content.slice(0, 3000)}\n`;
+    } catch {}
+  }
+
+  return {
+    files: targetFiles.map((f) => path.relative(projectPath, f)),
+    snippet: combined.slice(0, 15000),
+  };
+}
+
+async function processAndUploadProjectImage({
+  slug,
+  imageSource,
+}: {
+  slug: string;
+  imageSource: { type: "file" | "url" | "none"; pathOrUrl?: string };
+}): Promise<string | null> {
+  const supa = createServiceClient();
+  const localDir = path.resolve(__dirname, "..", "public", "images", "projects");
+  if (!fs.existsSync(localDir)) {
+    fs.mkdirSync(localDir, { recursive: true });
+  }
+  const localFilePath = path.join(localDir, `${slug}.webp`);
+
+  let imageBuffer: Buffer | null = null;
+
+  try {
+    if (imageSource.type === "file" && imageSource.pathOrUrl) {
+      if (fs.existsSync(imageSource.pathOrUrl)) {
+        imageBuffer = fs.readFileSync(imageSource.pathOrUrl);
+        console.log(`🖼️ Menggunakan file gambar lokal: ${imageSource.pathOrUrl}`);
+      } else {
+        console.warn(`⚠️ File gambar tidak ditemukan: ${imageSource.pathOrUrl}`);
+      }
+    } else if (imageSource.type === "url" && imageSource.pathOrUrl) {
+      console.log(`📸 Mengambil screenshot UI otomatis dari: ${imageSource.pathOrUrl}...`);
+      try {
+        const screenshotApiUrl = `https://api.microlink.io/?url=${encodeURIComponent(imageSource.pathOrUrl)}&screenshot=true&meta=false&embed=screenshot.url`;
+        const res = await axios.get(screenshotApiUrl, {
+          responseType: "arraybuffer",
+          timeout: 20000,
+          headers: { "User-Agent": "Portfolio-Screenshot-Bot" },
+        });
+        imageBuffer = Buffer.from(res.data);
+        console.log(`✅ Berhasil mengambil screenshot UI frontend!`);
+      } catch (err: any) {
+        console.warn(`⚠️ Gagal auto-screenshot via URL: ${err.message}`);
+      }
+    }
+
+    if (!imageBuffer && fs.existsSync(localFilePath)) {
+      imageBuffer = fs.readFileSync(localFilePath);
+    }
+
+    if (imageBuffer) {
+      const webpBuf = await sharp(imageBuffer)
+        .resize(1200, 675, { fit: "cover", position: "center" })
+        .webp({ quality: 88 })
+        .toBuffer();
+
+      fs.writeFileSync(localFilePath, webpBuf);
+      console.log(`💾 Gambar tersimpan di: public/images/projects/${slug}.webp`);
+
+      const { error } = await supa.storage.from("projects").upload(`${slug}.webp`, webpBuf, {
+        contentType: "image/webp",
+        upsert: true,
+      });
+
+      if (!error) {
+        console.log(`☁️ Berhasil upload gambar ke Supabase Storage (projects/${slug}.webp)`);
+        const { data: urlData } = supa.storage.from("projects").getPublicUrl(`${slug}.webp`);
+        return urlData.publicUrl;
+      } else {
+        console.warn(`⚠️ Supabase Storage upload note: ${error.message}`);
+      }
+    }
+  } catch (err: any) {
+    console.warn(`⚠️ Catatan pemrosesan gambar: ${err.message}`);
+  }
+
+  return null;
 }
 
 async function upsertSupabaseProject(data: {
@@ -284,6 +477,7 @@ async function upsertSupabaseProject(data: {
   stacks: string[];
   linkGithub: string;
   linkDemo?: string | null;
+  image?: string | null;
 }) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supaUrl || supaUrl.includes("your_supabase_url")) {
@@ -300,6 +494,7 @@ async function upsertSupabaseProject(data: {
       stacks: data.stacks,
       link_github: data.linkGithub,
       link_demo: data.linkDemo || null,
+      image: data.image || null,
       category: data.category,
       is_show: true,
       auto_generated: true,
@@ -555,6 +750,108 @@ PILIHAN ARGUMEN:
     linkDemo = `https://${slug}.vercel.app`;
   }
 
+  // Pengaturan Backend & Pendeployan Tambahan
+  let backendDeployPlatform: string = "none";
+  let backendDeployUrl = "";
+  let generateApiDoc = false;
+
+  async function promptBackendConfig(): Promise<void> {
+    console.log(`\n⚡ PENGATURAN BACKEND & API DEPLOYMENT:`);
+    const askApi = await ask(rl, "Apakah proyek ini memiliki backend / REST API? (y/N)", "N");
+    if (askApi.toLowerCase() === "y") {
+      generateApiDoc = true;
+      console.log(`\nPilih Platform Pendeployan Backend:`);
+      console.log(`  1) Monolith / Serverless Vercel (Frontend & Backend jadi 1 di Vercel)`);
+      console.log(`  2) Render.com (via Render Deploy Hook)`);
+      console.log(`  3) Railway.app (via Railway Webhook)`);
+      console.log(`  4) Vercel Project ke-2 (folder /backend atau microservice terpisah)`);
+      console.log(`  5) Custom Deploy Webhook`);
+      console.log(`  6) Lewati deployment backend`);
+      const choice = await ask(rl, "Pilihan platform backend (1-6)", "1");
+      if (choice === "2") {
+        backendDeployPlatform = "render";
+        backendDeployUrl = await ask(rl, "Masukkan Render Deploy Hook URL (tekan Enter jika belum ada)");
+      } else if (choice === "3") {
+        backendDeployPlatform = "railway";
+        backendDeployUrl = await ask(rl, "Masukkan Railway Webhook URL (tekan Enter jika belum ada)");
+      } else if (choice === "4") {
+        backendDeployPlatform = "vercel";
+      } else if (choice === "5") {
+        backendDeployPlatform = "custom";
+        backendDeployUrl = await ask(rl, "Masukkan Custom Webhook URL");
+      } else {
+        backendDeployPlatform = "none";
+      }
+    } else {
+      generateApiDoc = false;
+      backendDeployPlatform = "none";
+      backendDeployUrl = "";
+    }
+  }
+
+  // Pengaturan Gambar Proyek
+  let imageSource: { type: "file" | "url" | "none"; pathOrUrl?: string } = { type: "none" };
+
+  async function promptImageConfig(): Promise<void> {
+    const isFrontend = category === "web" || category === "web-frontend" || category === "web-fullstack";
+    if (isFrontend) {
+      console.log(`\n📸 PENGATURAN GAMBAR FRONTEND (Wajib dari UI Frontend asli, BUKAN AI slop):`);
+      console.log(`  1) Screenshot otomatis dari Live URL Demo / Localhost`);
+      console.log(`  2) Masukkan path file screenshot lokal (PNG/JPG/WebP)`);
+      console.log(`  3) Lewati (gunakan default)`);
+      const imgChoice = await ask(rl, "Pilihan gambar (1/2/3)", linkDemo ? "1" : "2");
+      if (imgChoice === "1") {
+        const targetUrl = await ask(rl, "URL Web untuk di-screenshot", linkDemo || "http://localhost:3000");
+        imageSource = { type: "url", pathOrUrl: targetUrl };
+      } else if (imgChoice === "2") {
+        while (true) {
+          const p = await ask(rl, "Masukkan path file screenshot lokal", "");
+          if (!p.trim()) {
+            imageSource = { type: "none" };
+            break;
+          }
+          const resolved = path.resolve(p.trim().replace(/^['"]|['"]$/g, ""));
+          if (fs.existsSync(resolved)) {
+            imageSource = { type: "file", pathOrUrl: resolved };
+            break;
+          }
+          console.log(`⚠️ File "${resolved}" tidak ditemukan. Coba lagi.`);
+        }
+      } else {
+        imageSource = { type: "none" };
+      }
+    } else {
+      console.log(`\n🎨 PENGATURAN GAMBAR PROYEK (${category.toUpperCase()}):`);
+      console.log(`  1) Gunakan file gambar sendiri (Foto rakitan IoT / poster game / diagram)`);
+      console.log(`  2) Lewati (gunakan default atau gambar yang sudah ada)`);
+      const imgChoice = await ask(rl, "Pilihan gambar (1/2)", "1");
+      if (imgChoice === "1") {
+        while (true) {
+          const p = await ask(rl, "Masukkan path file gambar (PNG/JPG/WebP)", "");
+          if (!p.trim()) {
+            imageSource = { type: "none" };
+            break;
+          }
+          const resolved = path.resolve(p.trim().replace(/^['"]|['"]$/g, ""));
+          if (fs.existsSync(resolved)) {
+            imageSource = { type: "file", pathOrUrl: resolved };
+            break;
+          }
+          console.log(`⚠️ File "${resolved}" tidak ditemukan. Coba lagi.`);
+        }
+      } else {
+        imageSource = { type: "none" };
+      }
+    }
+  }
+
+  if (category === "web" && !flags.name) {
+    await promptBackendConfig();
+  }
+  if (!flags.name) {
+    await promptImageConfig();
+  }
+
   // ==========================================================
   // REVIEW & EDIT LOOP (Jika user salah input, BISA DIUBAH!)
   // ==========================================================
@@ -574,13 +871,15 @@ PILIHAN ARGUMEN:
       console.log(`  6. Tech Stack       : ${stacks.join(", ")}`);
       console.log(`  7. Catatan / Hint   : ${descriptionHint || "-"}`);
       console.log(`  8. Live Demo URL    : ${linkDemo || "-"}`);
+      console.log(`  9. Backend & API    : ${generateApiDoc ? `Dokumentasi API.md Aktif | Deploy: ${backendDeployPlatform.toUpperCase()}` : "Tidak ada backend terpisah"}`);
+      console.log(` 10. Gambar Proyek    : ${imageSource.type === "url" ? `Auto-Screenshot (${imageSource.pathOrUrl})` : imageSource.type === "file" ? `File Lokal (${path.basename(imageSource.pathOrUrl || "")})` : "Gunakan default"}`);
       console.log(`  • GitHub Repo URL   : ${linkGithub}\n`);
 
       const choice = await ask(rl, "Pilihan: [Y] Lanjutkan | [E] Edit data | [Q] Batalkan (Y/e/q)", "Y");
       const c = choice.trim().toLowerCase();
 
       if (c === "y" || c === "yes" || c === "") {
-        break; // Lanjut eksekusi
+        break;
       }
 
       if (c === "q" || c === "quit") {
@@ -596,7 +895,7 @@ PILIHAN ARGUMEN:
       if (c === "e" || c === "edit" || !isNaN(Number(c))) {
         let fieldNum = c;
         if (c === "e" || c === "edit") {
-          fieldNum = await ask(rl, "Nomor berapa yang ingin diubah? (1-8)", "1");
+          fieldNum = await ask(rl, "Nomor berapa yang ingin diubah? (1-10)", "1");
         }
 
         switch (fieldNum.trim()) {
@@ -646,6 +945,12 @@ PILIHAN ARGUMEN:
           case "8":
             linkDemo = await ask(rl, "Masukkan Live Demo URL", linkDemo);
             break;
+          case "9":
+            await promptBackendConfig();
+            break;
+          case "10":
+            await promptImageConfig();
+            break;
           default:
             console.log(`⚠️ Nomor pilihan tidak dikenal.`);
         }
@@ -662,7 +967,7 @@ PILIHAN ARGUMEN:
   // ==========================================================
   // STEP 1: GENERATE README VIA GEMINI (Dengan Retry Loop)
   // ==========================================================
-  console.log(`🤖 1/6 Membangun README profesional & diagram wiring via Gemini AI...`);
+  console.log(`🤖 1/7 Membangun README profesional & diagram wiring via Gemini AI...`);
   let generatedData: { description: string; readme: string } | null = null;
 
   while (!generatedData) {
@@ -699,9 +1004,9 @@ PILIHAN ARGUMEN:
   const readme = generatedData?.readme || `# ${name}\n\n> ${description}\n`;
 
   // ==========================================================
-  // STEP 2: WRITE README.md & .gitignore LOCALLY
+  // STEP 2: WRITE README.md, .gitignore & API.md LOCALLY
   // ==========================================================
-  console.log(`📄 2/6 Menyimpan README.md dan file konfigurasi proyek...`);
+  console.log(`📄 2/7 Menyimpan README.md dan konfigurasi proyek...`);
   fs.writeFileSync(path.join(projectPath, "README.md"), readme, "utf-8");
 
   const gitignorePath = path.join(projectPath, ".gitignore");
@@ -709,10 +1014,26 @@ PILIHAN ARGUMEN:
     fs.writeFileSync(gitignorePath, getGitignoreTemplate(category), "utf-8");
   }
 
+  if (generateApiDoc) {
+    console.log(`📑 2b/7 Menghasilkan dokumentasi API.md khusus backend...`);
+    const backendScan = scanBackendSourceFiles(projectPath);
+    const apiDoc = await generateApiReadme({
+      name,
+      slug,
+      baseUrlLocal: "http://localhost:5000",
+      baseUrlProd: linkDemo || `https://${slug}.onrender.com`,
+      stacks,
+      backendSnippet: backendScan.snippet,
+      descriptionHint,
+    });
+    fs.writeFileSync(path.join(projectPath, "API.md"), apiDoc, "utf-8");
+    console.log(`✅ Berhasil membuat file dokumentasi: API.md`);
+  }
+
   // ==========================================================
   // STEP 3: LOCAL GIT INITIALIZATION & COMMIT
   // ==========================================================
-  console.log(`📦 3/6 Menginisialisasi Git lokal...`);
+  console.log(`📦 3/7 Menginisialisasi Git lokal...`);
   try {
     const isGit = fs.existsSync(path.join(projectPath, ".git"));
     if (!isGit) {
@@ -733,7 +1054,7 @@ PILIHAN ARGUMEN:
   // STEP 4: CREATE AND PUSH TO GITHUB (Dengan Retry/Skip Loop)
   // ==========================================================
   if (!flags.dryRun && !flags.skipGithub) {
-    console.log(`🌐 4/6 Menghubungkan dan push ke GitHub...`);
+    console.log(`🌐 4/7 Menghubungkan dan push ke GitHub...`);
     const topics = ["portfolio", category, ...stacks.slice(0, 5)];
     await createGithubRepo(slug, description, false, topics);
 
@@ -769,25 +1090,45 @@ PILIHAN ARGUMEN:
       }
     }
   } else {
-    console.log(`⏭️ 4/6 Melewati GitHub (dry-run / skip-github flag).`);
+    console.log(`⏭️ 4/7 Melewati GitHub (dry-run / skip-github flag).`);
   }
 
   // ==========================================================
-  // STEP 5: DEPLOY / VERCEL CONFIGURATION
+  // STEP 5: DEPLOYMENTS (FRONTEND & BACKEND)
   // ==========================================================
-  if (!flags.dryRun && !flags.skipVercel && category === "web") {
-    console.log(`▲ 5/6 Konfigurasi Deployment Vercel...`);
+  if (!flags.dryRun && !flags.skipVercel && (category === "web" || category === "web-frontend" || category === "web-fullstack")) {
+    console.log(`▲ 5/7 Konfigurasi Deployment Frontend (Vercel)...`);
     const liveUrl = await triggerVercelDeploy(slug, `${GITHUB_USERNAME}/${slug}`);
     if (liveUrl) linkDemo = liveUrl;
   } else {
-    console.log(`⏭️ 5/6 Melewati Vercel.`);
+    console.log(`⏭️ 5/7 Melewati Vercel.`);
+  }
+
+  if (!flags.dryRun && backendDeployPlatform !== "none") {
+    console.log(`⚙️ 5b/7 Memicu pendeployan Backend (${backendDeployPlatform.toUpperCase()})...`);
+    await triggerBackendDeploy({
+      platform: backendDeployPlatform as any,
+      slug,
+      repoFullName: `${GITHUB_USERNAME}/${slug}`,
+      deployUrl: backendDeployUrl,
+    });
   }
 
   // ==========================================================
-  // STEP 6: SUPABASE & PORTFOLIO MDX CONTENT
+  // STEP 6: PROCESS & UPLOAD PROJECT IMAGE
+  // ==========================================================
+  let uploadedImageUrl: string | null = null;
+  console.log(`🖼️ 6/7 Memproses gambar proyek...`);
+  uploadedImageUrl = await processAndUploadProjectImage({
+    slug,
+    imageSource,
+  });
+
+  // ==========================================================
+  // STEP 7: SUPABASE & PORTFOLIO MDX CONTENT
   // ==========================================================
   if (!flags.dryRun && !flags.skipSupabase) {
-    console.log(`🗄️ 6/6 Sinkronisasi ke Supabase & Portfolio website...`);
+    console.log(`🗄️ 7/7 Sinkronisasi ke Supabase & Portfolio website...`);
     await upsertSupabaseProject({
       slug,
       title: name,
@@ -796,6 +1137,7 @@ PILIHAN ARGUMEN:
       stacks,
       linkGithub,
       linkDemo,
+      image: uploadedImageUrl,
     });
   }
 
@@ -804,7 +1146,8 @@ PILIHAN ARGUMEN:
   const mdxDir = path.join(portfolioRootDir, "contents", "projects");
   if (fs.existsSync(mdxDir)) {
     const mdxFile = path.join(mdxDir, `${slug}.mdx`);
-    fs.writeFileSync(mdxFile, readme, "utf-8");
+    const safeMdxContent = readme.replace(/<img([^>]*?)(?<!\/)>/gi, "<img$1 />");
+    fs.writeFileSync(mdxFile, safeMdxContent, "utf-8");
     console.log(`📝 Berhasil membuat file MDX portfolio: contents/projects/${slug}.mdx`);
 
     try {
@@ -822,11 +1165,14 @@ PILIHAN ARGUMEN:
 ║                      🎉 OTOMASI PROYEK SELESAI! 🎉                       ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 
-✅ README Profesional : Dibuat dengan diagram wiring Mermaid & pinout lengkap
+✅ README Profesional : Dokumentasi standar industri
+${generateApiDoc ? `✅ API.md            : Dokumentasi endpoint & spesifikasi RESTful API` : ""}
 ✅ GitHub Repo        : ${linkGithub} (Topic: portfolio, ${category})
 ✅ Portfolio Web      : Tampil otomatis di /projects [Kategori: ${category.toUpperCase()}]
 ✅ Database Supabase  : Proyek tersimpan dan aktif (is_show = true)
 ${category === "web" ? `✅ Vercel Deploy     : ${linkDemo}` : ""}
+${backendDeployPlatform !== "none" ? `✅ Backend Deploy    : Platform ${backendDeployPlatform.toUpperCase()}` : ""}
+${uploadedImageUrl ? `✅ Gambar Proyek     : Ter-upload ke Supabase Storage & lokal` : ""}
 
 Langkah Selanjutnya:
 1. Mulai kembangkan kode di folder: ${projectPath}
