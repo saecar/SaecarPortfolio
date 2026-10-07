@@ -1,0 +1,154 @@
+# Cafe System Order API
+
+> Solusi backend RESTful API modern berbasis Laravel untuk sistem pemesanan kafe terintegrasi yang dirancang untuk mengotomatisasi manajemen transaksi dan pembayaran digital melalui Midtrans.
+
+<div align="center">
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Category: Web](https://img.shields.io/badge/Category-Web-blue.svg)](https://github.com/saecar/cafe-system-order-api)
+[![Tech: Laravel](https://img.shields.io/badge/Tech-Laravel-red.svg)](https://laravel.com)
+[![Tech: PHP](https://img.shields.io/badge/Tech-PHP-indigo.svg)](https://php.net)
+[![Tech: Midtrans](https://img.shields.io/badge/Gateway-Midtrans-green.svg)](https://midtrans.com)
+[![Live Demo](https://img.shields.io/badge/Demo-Live_Preview-success.svg)](https://cafe-system-order-api.vercel.app)
+
+</div>
+
+---
+
+## 🌟 Fitur Utama
+
+- 🛒 **Manajemen Keranjang & Pesanan Real-time**: Memungkinkan pelanggan memesan menu kafe secara fleksibel dengan pencatatan status pesanan secara *live*.
+- 💳 **Integrasi Payment Gateway (Midtrans)**: Mendukung berbagai metode pembayaran instan (QRIS, E-Wallet, Transfer Bank, Kartu Kredit) secara otomatis.
+- 📊 **Dashboard & Laporan Kasir**: Menyediakan endpoint REST API untuk rekapitulasi transaksi harian, mingguan, dan bulanan bagi admin/kasir.
+- 🔐 **Autentikasi Aman (Sanctum)**: Sistem keamanan berbasis token untuk melindungi endpoint API dari akses unauthorized antara client dan server.
+
+---
+
+## 🛠 Tech Stack & Komponen
+
+Arsitektur aplikasi web ini dirancang menggunakan standar industri modern untuk memastikan skalabilitas dan performa tinggi:
+
+- **Backend**: PHP 8.2+, Laravel 10 (RESTful API Architecture)
+- **Frontend / Client Integration**: Mendukung konsumsi API untuk SPA (Single Page Application) atau Mobile App
+- **Database**: MySQL / PostgreSQL (Kompatibel dengan Supabase)
+- **Autentikasi**: Laravel Sanctum (Token-based API Authentication)
+- **Payment Gateway**: Midtrans Snap API / Core API
+- **Deployment**: Vercel (Serverless PHP Runtime)
+
+---
+
+## 🚀 Cara Pemasangan & Persiapan
+
+Ikuti langkah-langkah di bawah ini untuk menyiapkan proyek secara lokal di komputer Anda:
+
+### 1. Prasyarat Sistem
+Pastikan komputer Anda telah menginstal perangkat lunak berikut:
+- PHP >= 8.2
+- Composer
+- Git
+- Node.js & NPM (atau Bun)
+
+### 2. Kloning Repositori
+Buka terminal Anda dan jalankan perintah berikut:
+
+```bash
+git clone https://github.com/saecar/cafe-system-order-api.git
+cd cafe-system-order-api
+```
+
+### 3. Instalasi Dependensi Backend (PHP/Laravel)
+```bash
+composer install
+```
+
+### 4. Konfigurasi Environment Variables
+Salin file konfigurasi contoh dan sesuaikan dengan kredensial lokal Anda:
+
+```bash
+cp .env.example .env
+```
+
+Buka file `.env` dan atur konfigurasi database serta kunci Midtrans Anda:
+```env
+APP_NAME="Cafe System Order API"
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=cafe_system_db
+DB_USERNAME=root
+DB_PASSWORD=
+
+MIDTRANS_SERVER_KEY=your-midtrans-server-key
+MIDTRANS_CLIENT_KEY=your-midtrans-client-key
+MIDTRANS_IS_PRODUCTION=false
+```
+
+### 5. Generate Application Key & Migrasi Database
+```bash
+php artisan key:generate
+php artisan migrate --seed
+```
+
+### 6. Menjalankan Server Lokal
+```bash
+php artisan serve
+```
+Aplikasi API kini dapat diakses melalui `http://localhost:8000`.
+
+---
+
+## 📦 Panduan Deploy ke Vercel & Supabase
+
+Proyek ini dikonfigurasi agar dapat berjalan di lingkungan *serverless* Vercel dengan database cloud Supabase.
+
+1. **Persiapan Supabase**:
+   - Buat proyek baru di [Supabase](https://supabase.com/).
+   - Ambil kredensial koneksi PostgreSQL (`Host`, `Port`, `Database`, `User`, `Password`).
+   - Masukkan kredensial tersebut ke dalam pengaturan Environment Variables di dashboard Vercel.
+
+2. **Konfigurasi Vercel**:
+   - Hubungkan repositori GitHub `https://github.com/saecar/cafe-system-order-api` ke Vercel.
+   - Tambahkan variabel lingkungan (`APP_KEY`, `DB_CONNECTION`, `DB_HOST`, `MIDTRANS_SERVER_KEY`, dll.) di tab **Environment Variables** proyek Vercel Anda.
+   - Lakukan *Deploy* otomatis menggunakan konfigurasi `vercel.json` yang sudah disediakan dalam repositori.
+
+---
+
+## 📂 Struktur Folder
+
+Berikut adalah struktur direktori utama dari proyek Cafe System Order API:
+
+```text
+cafe-system-order-api/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   ├── Api/
+│   │   │   │   ├── AuthController.php
+│   │   │   │   ├── MenuController.php
+│   │   │   │   ├── OrderController.php
+│   │   │   │   └── PaymentController.php
+│   │   │   └── Middleware/
+│   └── Models/
+├── database/
+│   ├── migrations/
+│   └── seeders/
+├── routes/
+│   ├── api.php
+│   └── web.php
+├── .env.example
+├── composer.json
+└── vercel.json
+```
+
+---
+
+## 🤝 Kontribusi & Lisensi
+
+Kontribusi, isu, dan permintaan fitur sangat diterima! Silakan buka *Pull Request* atau *Issues* pada [GitHub Repository](https://github.com/saecar/cafe-system-order-api).
+
+Proyek ini dilisensikan di bawah [MIT License](https://opensource.org/licenses/MIT).
