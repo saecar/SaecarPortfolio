@@ -18,6 +18,7 @@ export interface GenerateReadmeOptions {
   stacks?: string[];
   linkGithub?: string;
   linkDemo?: string;
+  sourceCodeSnippet?: string;
 }
 
 function fallbackReadme({
@@ -28,8 +29,9 @@ function fallbackReadme({
   name = repo,
   descriptionHint,
   stacks = [],
-  linkGithub = `https://github.com/satriabahari/${slug}`,
+  linkGithub = `https://github.com/saecar/${slug}`,
   linkDemo,
+  sourceCodeSnippet,
 }: GenerateReadmeOptions) {
   const stackBadges = (stacks.length ? stacks : topics)
     .map((s) => `\`${s}\``)
@@ -62,7 +64,29 @@ Proyek **${name}** adalah solusi hardware cerdas berbasis mikrokontroler (ESP32/
 - **Framework & IDE**: PlatformIO / Arduino IDE / C++
 - **Tech Stack**: ${stackBadges}
 
-### 🔌 Skema Pinout & Wiring (Rangkaian)
+### 🔌 Skema Pinout & Diagram Rangkaian (Wiring)
+
+\`\`\`mermaid
+graph LR
+  subgraph MCU["ESP32 Development Board"]
+    P_3V3["3.3V (VCC)"]
+    P_GND["GND (Ground)"]
+    P_GPIO4["GPIO 4 (Signal/Data)"]
+    P_I2C_SDA["GPIO 21 (SDA)"]
+    P_I2C_SCL["GPIO 22 (SCL)"]
+  end
+
+  subgraph Sensor["Sensor Modul"]
+    S_VCC["VCC"]
+    S_GND["GND"]
+    S_DAT["DATA / OUT"]
+  end
+
+  P_3V3 --> S_VCC
+  P_GND --> S_GND
+  P_GPIO4 --> S_DAT
+\`\`\`
+
 | Komponen / Sensor | Pin Sensor | Pin Mikrokontroler (ESP32) | Keterangan |
 | :--- | :--- | :--- | :--- |
 | VCC / Power | VCC | 3.3V / 5V | Sumber Tegangan |
@@ -295,8 +319,9 @@ export async function generateReadme(
     name = repo,
     descriptionHint,
     stacks = [],
-    linkGithub = `https://github.com/satriabahari/${slug}`,
+    linkGithub = `https://github.com/saecar/${slug}`,
     linkDemo,
+    sourceCodeSnippet,
   } = options;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -312,10 +337,42 @@ export async function generateReadme(
 
   let categoryGuide = "";
   if (category === "iot") {
+    const codeContext = sourceCodeSnippet
+      ? `
+ANALISIS KODE SUMBER FIRMWARE / HARDWARE (Ditemukan dari file proyek):
+\`\`\`cpp
+${sourceCodeSnippet}
+\`\`\`
+INSTRUKSI DETEKSI WIRING & PINOUT DARI KODE:
+- Telaah baris-baris kode di atas secara seksama (temukan deklarasi pin seperti #define, const int, pinMode, Wire.begin(SDA, SCL), SPI, Serial, library sensor seperti DHT, Adafruit_BME280, Servo, Relay, dsb).
+- Ekstrak seluruh komponen/sensor yang digunakan dan pin GPIO mikrokontroler yang terhubung!
+`
+      : "";
+
     categoryGuide = `
 Spesifik Kategori IoT:
+${codeContext}
+- WAJIB BUAT DIAGRAM WIRING INTERAKTIF / RANGKAIAN MENGGUNAKAN MERMAID (GitHub merender diagram ini secara visual otomatis).
+  Format contoh:
+  \`\`\`mermaid
+  graph LR
+    subgraph MCU["ESP32 / Mikrokontroler"]
+      MCU_3V3["3.3V (VCC)"]
+      MCU_GND["GND (Ground)"]
+      MCU_P4["GPIO 4 (Signal/Data)"]
+      MCU_P5["GPIO 5 (Relay IN)"]
+    end
+    subgraph Sensor1["DHT22 / Sensor"]
+      S1_VCC["VCC"]
+      S1_GND["GND"]
+      S1_DAT["DATA"]
+    end
+    MCU_3V3 --> S1_VCC
+    MCU_GND --> S1_GND
+    MCU_P4 --> S1_DAT
+  \`\`\`
+- Buat TABEL WIRING / PINOUT LENGKAP yang mendampingi diagram (Nama Komponen/Sensor, Pin Sensor/Modul, Pin Mikrokontroler, Level Tegangan, Keterangan / Fungsi).
 - Tuliskan tabel komponen hardware & sensor (Bill of Materials).
-- Buat TABEL WIRING / PINOUT lengkap (Komponen, Pin Sensor, Pin GPIO Mikrokontroler seperti ESP32/Arduino, Keterangan).
 - Jelaskan step pemasangan menggunakan PlatformIO CLI / VS Code dan Arduino IDE.
 - Tuliskan langkah upload firmware (misal: "pio run -t upload", buka Serial Monitor pada baud rate 115200).
 - Jelaskan konfigurasi WiFi/MQTT/Cloud database jika relevan.

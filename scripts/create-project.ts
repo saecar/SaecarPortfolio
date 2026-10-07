@@ -67,9 +67,59 @@ function parseArgs(): Record<string, string | boolean> {
     else if (arg === "--desc" || arg === "-d") result.desc = args[++i];
     else if (arg === "--stacks") result.stacks = args[++i];
     else if (arg === "--demo") result.demo = args[++i];
+    else if (arg === "--code") result.code = args[++i];
   }
 
   return result;
+}
+
+function scanIotSourceFiles(projectPath: string): { files: string[]; snippet: string } {
+  const extensions = [".ino", ".cpp", ".c", ".h", ".hpp", ".py"];
+  const targetFiles: string[] = [];
+
+  function walk(dir: string, depth = 0) {
+    if (depth > 3) return;
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (
+          entry.name.startsWith(".") ||
+          entry.name === "node_modules" ||
+          entry.name === ".pio" ||
+          entry.name === ".git"
+        ) {
+          continue;
+        }
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full, depth + 1);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (extensions.includes(ext) || entry.name === "platformio.ini" || entry.name === "diagram.json") {
+            targetFiles.push(full);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  walk(projectPath);
+
+  if (targetFiles.length === 0) return { files: [], snippet: "" };
+
+  let combined = "";
+  for (const file of targetFiles.slice(0, 6)) {
+    try {
+      const rel = path.relative(projectPath, file);
+      const content = fs.readFileSync(file, "utf-8");
+      combined += `\n--- FILE: ${rel} ---\n${content.slice(0, 4000)}\n`;
+    } catch {}
+  }
+
+  return {
+    files: targetFiles.map((f) => path.relative(projectPath, f)),
+    snippet: combined.slice(0, 15000),
+  };
 }
 
 function ask(rl: readline.Interface, question: string, defaultValue = ""): Promise<string> {
@@ -307,6 +357,7 @@ PILIHAN ARGUMEN:
   -d, --desc <teks>       Catatan / deskripsi / hardware yang dipakai
   --stacks <a,b,c>        Tech stack dipisah koma (contoh: "ESP32,C++,PlatformIO")
   --demo <url>            URL Demo / Live Preview
+  --code <file|teks>      Path file kode firmware atau kode sumber (auto-deteksi diagram wiring)
   --dry-run               Jalankan simulasi tanpa push ke GitHub/Supabase
   --skip-github           Lewati pembuatan repo GitHub
   --skip-supabase         Lewati simpan ke Supabase
@@ -362,7 +413,53 @@ PILIHAN ARGUMEN:
     console.log(`📁 Membuat direktori proyek baru: ${projectPath}`);
   }
 
-  // Step 5: Description & Hardware/Engine details
+  // Step 5: IoT Source Code & Automatic Wiring Detection
+  let sourceCodeSnippet = "";
+  if (category === "iot") {
+    if (flags.code) {
+      const codeArg = String(flags.code);
+      if (fs.existsSync(codeArg)) {
+        try {
+          sourceCodeSnippet = fs.readFileSync(codeArg, "utf-8").slice(0, 15000);
+          console.log(`🔌 Membaca kode firmware dari file: ${codeArg}`);
+        } catch {}
+      } else {
+        sourceCodeSnippet = codeArg.slice(0, 15000);
+      }
+    } else {
+      const scanned = scanIotSourceFiles(projectPath);
+      if (scanned.files.length > 0) {
+        sourceCodeSnippet = scanned.snippet;
+        console.log(`\n🔌 Terdeteksi ${scanned.files.length} file firmware di folder: ${scanned.files.join(", ")}`);
+        console.log(`   -> AI akan otomatis mengekstrak pinout dan merender diagram wiring Mermaid!`);
+      } else if (!flags.name) {
+        console.log(`\n🔌 Deteksi Wiring & Pinout Otomatis:`);
+        const codeInput = await ask(
+          rl,
+          "Masukkan path file kode sumber (misal C:\\kode\\main.cpp) atau kosongkan jika tidak ada",
+          ""
+        );
+        if (codeInput && fs.existsSync(codeInput)) {
+          try {
+            sourceCodeSnippet = fs.readFileSync(codeInput, "utf-8").slice(0, 15000);
+            console.log(`✅ Berhasil membaca kode sumber dari: ${codeInput}`);
+            // Salin file kode sumber ke folder proyek jika belum ada
+            const targetSrcDir = path.join(projectPath, "src");
+            if (!fs.existsSync(targetSrcDir)) fs.mkdirSync(targetSrcDir, { recursive: true });
+            const targetFile = path.join(targetSrcDir, path.basename(codeInput));
+            if (!fs.existsSync(targetFile)) {
+              fs.writeFileSync(targetFile, sourceCodeSnippet, "utf-8");
+              console.log(`📁 Menyalin file kode sumber ke: ${targetFile}`);
+            }
+          } catch (e: any) {
+            console.warn("⚠️ Gagal membaca file kode:", e.message);
+          }
+        }
+      }
+    }
+  }
+
+  // Step 6: Description & Hardware/Engine details
   let descriptionHint = (flags.desc as string) || "";
   if (!descriptionHint && !flags.name) {
     const hintPrompt =
@@ -374,7 +471,7 @@ PILIHAN ARGUMEN:
     descriptionHint = await ask(rl, `📝 ${hintPrompt}`, "");
   }
 
-  // Step 6: Tech stacks
+  // Step 7: Tech stacks
   let stacks: string[] = [];
   if (flags.stacks) {
     stacks = (flags.stacks as string).split(",").map((s) => s.trim()).filter(Boolean);
@@ -389,7 +486,7 @@ PILIHAN ARGUMEN:
     stacks = stacksInput.split(",").map((s) => s.trim()).filter(Boolean);
   }
 
-  // Step 7: Demo URL (optional)
+  // Step 8: Demo URL (optional)
   let linkDemo = (flags.demo as string) || "";
   if (!linkDemo && category === "web") {
     linkDemo = `https://${slug}.vercel.app`;
@@ -397,7 +494,7 @@ PILIHAN ARGUMEN:
 
   const linkGithub = `https://github.com/${GITHUB_USERNAME}/${slug}`;
 
-  // Step 8: Confirmation
+  // Step 9: Confirmation
   console.log(`\n📋 RINGKASAN PROYEK:`);
   console.log(`  • Judul       : ${name}`);
   console.log(`  • Slug        : ${slug}`);
@@ -405,7 +502,11 @@ PILIHAN ARGUMEN:
   console.log(`  • Folder      : ${projectPath}`);
   console.log(`  • Tech Stack  : ${stacks.join(", ")}`);
   console.log(`  • GitHub Repo : ${linkGithub}`);
-  console.log(`  • Live Demo   : ${linkDemo || "-"}\n`);
+  console.log(`  • Live Demo   : ${linkDemo || "-"}`);
+  if (category === "iot") {
+    console.log(`  • Diagram     : ${sourceCodeSnippet ? "Otomatis (Mermaid wiring dideteksi dari kode)" : "Template Standar"}`);
+  }
+  console.log("");
 
   if (!flags.name) {
     const proceed = await ask(rl, "Lanjutkan proses otomasi? (Y/n)", "Y");
@@ -420,7 +521,7 @@ PILIHAN ARGUMEN:
   console.log(`\n⏳ Memulai proses otomasi...\n`);
 
   // 1. Generate README with Gemini
-  console.log(`🤖 1/6 Membangun README profesional & deskripsi via Gemini AI...`);
+  console.log(`🤖 1/6 Membangun README profesional & diagram wiring via Gemini AI...`);
   const { description, readme } = await generateReadme({
     repo: slug,
     slug,
@@ -431,6 +532,7 @@ PILIHAN ARGUMEN:
     stacks,
     linkGithub,
     linkDemo,
+    sourceCodeSnippet,
   });
 
   // 2. Write README.md and .gitignore locally
