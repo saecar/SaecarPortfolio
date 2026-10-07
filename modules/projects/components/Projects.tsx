@@ -31,15 +31,19 @@ const Projects = ({ initialData }: ProjectsProps) => {
 
   const t = useTranslations("ProjectsPage");
 
-  const shownProjects: ProjectItem[] = (data || [])
-    ?.filter((item: ProjectItem) => item?.is_show)
+  const rawList = Array.isArray(data) ? data : [];
+  const shownProjects: ProjectItem[] = rawList
+    .filter((item: ProjectItem) => item?.is_show)
     .sort((a: ProjectItem, b: ProjectItem) => {
       if (a.is_featured && !b.is_featured) return -1;
       if (!a.is_featured && b.is_featured) return 1;
 
-      if (a.is_featured && b.is_featured) return a.id - b.id;
+      const aId = Number(a.id) || 0;
+      const bId = Number(b.id) || 0;
 
-      return b.id - a.id;
+      if (a.is_featured && b.is_featured) return aId - bId;
+
+      return bId - aId;
     });
 
   const filteredProjects = shownProjects.filter((item) => {

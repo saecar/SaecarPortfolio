@@ -37,8 +37,14 @@ interface DataProps {
 }
 
 const TrafficTrendsChart = ({ data }: DataProps) => {
-  const rawLabels = data?.pageviews?.map((point) => point.x) || [];
-  const labels = rawLabels?.map((isoDate) => format(parseISO(isoDate), "MMM"));
+  const rawLabels = Array.isArray(data?.pageviews) ? data.pageviews.map((point) => point.x) : [];
+  const labels = rawLabels.map((isoDate) => {
+    try {
+      return isoDate ? format(parseISO(isoDate), "MMM") : "";
+    } catch {
+      return isoDate || "";
+    }
+  });
 
   const chartData = {
     labels,
@@ -79,7 +85,12 @@ const TrafficTrendsChart = ({ data }: DataProps) => {
           title: (tooltipItems) => {
             const index = tooltipItems[0].dataIndex;
             const isoDate = rawLabels[index];
-            return isoDate ? format(parseISO(isoDate), "MMM yyyy") : "";
+            if (!isoDate) return "";
+            try {
+              return format(parseISO(isoDate), "MMM yyyy");
+            } catch {
+              return isoDate;
+            }
           },
         },
       },

@@ -34,12 +34,15 @@ export const formatDate = (date: string, type = "MMMM dd, yyyy") => {
     return "";
   }
 
-  const formattedDate = format(
-    utcToZonedTime(parseISO(date), "Asia/Jakarta"),
-    type,
-  );
-
-  return formattedDate;
+  try {
+    const formattedDate = format(
+      utcToZonedTime(parseISO(date), "Asia/Jakarta"),
+      type,
+    );
+    return formattedDate;
+  } catch {
+    return date;
+  }
 };
 
 // export const parseQueryParams = (searchParams) => {

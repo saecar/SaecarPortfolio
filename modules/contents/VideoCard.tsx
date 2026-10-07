@@ -5,9 +5,10 @@ import { FiPlay as ViewIcon } from "react-icons/fi";
 import Image from "@/common/components/elements/Image";
 import { VideoItem } from "@/common/types/tiktok";
 
-const formatViewCount = (count: number) => {
-  if (count < 10000) {
-    return count.toString();
+const formatViewCount = (count?: number) => {
+  const num = Number(count) || 0;
+  if (num < 10000) {
+    return num.toString();
   }
 
   return new Intl.NumberFormat("en-US", {
@@ -15,7 +16,7 @@ const formatViewCount = (count: number) => {
     compactDisplay: "short",
     maximumFractionDigits: 1,
   })
-    .format(count)
+    .format(num)
     .toLowerCase();
 };
 

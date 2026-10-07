@@ -16,13 +16,13 @@ const Overview = ({ data }: OverviewProps) => {
       <div className="grid grid-cols-2 gap-3 py-2 sm:grid-cols-4">
         <OverviewItem
           label={t("title_rank")}
-          value={Math.abs(data?.ranks.overall.rank)}
+          value={Math.abs(data?.ranks?.overall?.rank || 0)}
           unit="kyu"
         />
-        <OverviewItem label={t("title_honor")} value={data?.honor} />
+        <OverviewItem label={t("title_honor")} value={data?.honor ?? 0} />
         <OverviewItem
           label={t("title_completed")}
-          value={data?.codeChallenges.totalCompleted}
+          value={data?.codeChallenges?.totalCompleted ?? 0}
         />
         <OverviewItem
           label={t("title_leaderboard")}
@@ -30,10 +30,10 @@ const Overview = ({ data }: OverviewProps) => {
         />
       </div>
       <div className="grid grid-cols-1 gap-3 py-2 capitalize sm:grid-cols-2">
-        <OverviewItem label={t("title_clan")} value={data?.clan} />
+        <OverviewItem label={t("title_clan")} value={data?.clan || "-"} />
         <OverviewItem
           label={t("title_skills")}
-          value={data?.skills?.map((skill) => skill).join(", ")}
+          value={data?.skills?.length ? data.skills.join(", ") : "-"}
         />
       </div>
     </div>

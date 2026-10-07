@@ -34,7 +34,7 @@ const Progress = ({ data, className }: ProgressProps) => {
         </motion.span>
       </div>
       <div className="w-8 text-right text-neutral-600 dark:text-neutral-100">
-        {percent.toFixed(0)}%
+        {(Number(percent) || 0).toFixed(0)}%
       </div>
     </div>
   );

@@ -47,8 +47,9 @@ const ProjectCard = ({
   const t = useTranslations("ProjectsPage");
   const catBadge = getCategoryBadge(category);
 
+  const safeDescription = description || "";
   const trimmedContent =
-    description.slice(0, 85) + (description.length > 85 ? "..." : "");
+    safeDescription.slice(0, 85) + (safeDescription.length > 85 ? "..." : "");
 
   return (
     <Link href={`/projects/${slug}`}>

@@ -26,7 +26,14 @@ const AchievementCard = ({
   const [isOpen, setIsOpen] = useState(false);
   const t = useTranslations("AchievementsPage");
 
-  const issueDate = issue_date ? format(parseISO(issue_date), "MMMM yyyy") : "";
+  let issueDate = "";
+  if (issue_date) {
+    try {
+      issueDate = format(parseISO(issue_date), "MMMM yyyy");
+    } catch {
+      issueDate = issue_date;
+    }
+  }
 
   useEffect(() => {
     if (isOpen) {

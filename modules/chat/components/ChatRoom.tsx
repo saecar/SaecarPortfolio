@@ -73,7 +73,7 @@ export const ChatRoom = ({ isWidget = false }: { isWidget?: boolean }) => {
   };
 
   useEffect(() => {
-    if (data) setMessages(data);
+    if (Array.isArray(data)) setMessages(data);
   }, [data]);
 
   useEffect(() => {
@@ -88,7 +88,7 @@ export const ChatRoom = ({ isWidget = false }: { isWidget?: boolean }) => {
         },
         (payload) => {
           setMessages((prevMessages) => [
-            ...prevMessages,
+            ...(Array.isArray(prevMessages) ? prevMessages : []),
             payload.new as MessageProps,
           ]);
         },
@@ -102,7 +102,7 @@ export const ChatRoom = ({ isWidget = false }: { isWidget?: boolean }) => {
         },
         (payload) => {
           setMessages((prevMessages) =>
-            prevMessages.filter((msg) => msg.id !== payload.old.id),
+            (Array.isArray(prevMessages) ? prevMessages : []).filter((msg) => msg.id !== payload.old.id),
           );
         },
       )
@@ -113,7 +113,7 @@ export const ChatRoom = ({ isWidget = false }: { isWidget?: boolean }) => {
     };
   }, [supabase]);
 
-  const filteredMessages = messages.filter((msg) => msg.is_show === true);
+  const filteredMessages = Array.isArray(messages) ? messages.filter((msg) => msg.is_show === true) : [];
 
   return (
     <>

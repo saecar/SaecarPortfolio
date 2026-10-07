@@ -33,14 +33,18 @@ const CodingActive = () => {
     const formatLastUpdate = (): void => {
       const lastUpdateDate = data?.last_update;
       if (lastUpdateDate) {
-        const zoneDate = utcToZonedTime(
-          zonedTimeToUtc(lastUpdateDate, "Asia/Jakarta"),
-          "Asia/Jakarta",
-        );
-        const distance = formatDistanceToNowStrict(zoneDate, {
-          addSuffix: true,
-        });
-        setFormattedLastUpdate(distance);
+        try {
+          const zoneDate = utcToZonedTime(
+            zonedTimeToUtc(lastUpdateDate, "Asia/Jakarta"),
+            "Asia/Jakarta",
+          );
+          const distance = formatDistanceToNowStrict(zoneDate, {
+            addSuffix: true,
+          });
+          setFormattedLastUpdate(distance);
+        } catch {
+          setFormattedLastUpdate(null);
+        }
       }
     };
 

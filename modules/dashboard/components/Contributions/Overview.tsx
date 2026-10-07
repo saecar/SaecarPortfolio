@@ -26,16 +26,18 @@ const Overview = ({ data }: OverviewProps) => {
 
   const totalContributionList = weeks
     .map((week) =>
-      week.contributionDays.map(
-        (contributionDay) => contributionDay.contributionCount,
+      (week?.contributionDays || []).map(
+        (contributionDay) => contributionDay?.contributionCount || 0,
       ),
     )
     .flat();
 
-  const bestContribution = Math.max(...totalContributionList) || 0;
-  const averageContribution = Math.round(
-    totalContributions / totalContributionList.length,
-  );
+  const bestContribution =
+    totalContributionList.length > 0 ? Math.max(...totalContributionList) : 0;
+  const averageContribution =
+    totalContributionList.length > 0
+      ? Math.round(totalContributions / totalContributionList.length)
+      : 0;
 
   const t = useTranslations("DashboardPage.github");
 

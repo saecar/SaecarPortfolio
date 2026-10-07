@@ -46,13 +46,13 @@ const Calendar = ({ data }: CalendarProps) => {
     data?.months?.map((month: Month) => {
       const filterContributionDay = weeks
         .filter(
-          (week) => week.firstDay.slice(0, 7) === month.firstDay.slice(0, 7),
+          (week) => week?.firstDay?.slice(0, 7) === month?.firstDay?.slice(0, 7),
         )
-        .map((item) => item.contributionDays)
+        .map((item) => item?.contributionDays || [])
         .flat(1);
       const getContributionsByMonth = filterContributionDay.reduce(
         (previousValue, currentValue) =>
-          previousValue + currentValue.contributionCount,
+          previousValue + (currentValue?.contributionCount || 0),
         0,
       );
 
@@ -81,10 +81,10 @@ const Calendar = ({ data }: CalendarProps) => {
         <div className="flex justify-start gap-[2.9px] overflow-hidden">
           {weeks?.map((week) => (
             <div key={week.firstDay}>
-              {week.contributionDays.map((contribution) => {
-                const colorIndex = data?.colors.indexOf(contribution.color);
+              {(week?.contributionDays || []).map((contribution) => {
+                const colorIndex = data?.colors ? data.colors.indexOf(contribution.color) : -1;
                 const customColor =
-                  colorIndex !== -1 ? contributionColors[colorIndex!] : null;
+                  colorIndex !== -1 ? contributionColors[colorIndex] : null;
 
                 const backgroundColor =
                   contribution.contributionCount > 0 ? customColor : null;

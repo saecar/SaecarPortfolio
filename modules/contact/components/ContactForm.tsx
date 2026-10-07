@@ -46,7 +46,8 @@ const ContactForm = () => {
       reset();
       setIsLoading(false);
     } catch (error) {
-      console.log(error);
+      console.error(error);
+      setButtonText("Failed to send email. Please try again.");
       setIsLoading(false);
     }
   };

@@ -36,7 +36,9 @@ const Tiktok = () => {
     isLoading: videoLoading,
   } = useSWRInfinite(getKey, fetcher);
 
-  const allVideos = data ? data.flatMap((page) => page.videos) : [];
+  const allVideos = data
+    ? data.flatMap((page) => (Array.isArray(page?.videos) ? page.videos : []))
+    : [];
   const hasMore = data ? data[data.length - 1]?.has_more : false;
   const isRefreshing = videoValidating && data && data.length === size;
 

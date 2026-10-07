@@ -36,8 +36,9 @@ const Achievements = () => {
 
   const { data, isLoading, error } = useSWR(apiUrl, fetcher);
   
-  const filteredAchievements: AchievementItem[] = data
-    ?.filter((item: AchievementItem) => {
+  const rawAchievements = Array.isArray(data) ? data : [];
+  const filteredAchievements: AchievementItem[] = rawAchievements
+    .filter((item: AchievementItem) => {
       const matchesShow = item?.is_show;
 
       const matchesCategory = !category || item?.category === category;
@@ -46,7 +47,7 @@ const Achievements = () => {
 
       return matchesShow && matchesType && matchesCategory;
     })
-    .sort((a: AchievementItem, b: AchievementItem) => b.id - a.id);
+    .sort((a: AchievementItem, b: AchievementItem) => (Number(b.id) || 0) - (Number(a.id) || 0));
 
   return (
     <section className="space-y-4">
