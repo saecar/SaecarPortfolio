@@ -1,0 +1,163 @@
+# Parking system
+> Sistem gerbang parkir cerdas berbasis IoT menggunakan Arduino Uno, modul NFC, dan kontrol servo otomatis untuk akses masuk yang aman dan efisien.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Category](https://img.shields.io/badge/Category-IoT-blue.svg)](https://github.com/topics/iot)
+[![Tech Stack](https://img.shields.io/badge/Tech-C++%20%7C%20Arduino-orange.svg)](https://github.com/topics/arduino)
+[![Platform](https://img.shields.io/badge/Platform-Arduino%20Uno-green.svg)](https://github.com/saecar/parking-system)
+
+---
+
+## 🌟 Fitur Utama
+
+- **Autentikasi Kartu NFC/RFID**: Menggunakan modul Elechouse NFC V3 (PN532) dengan komunikasi Hardware SPI untuk pembacaan UID kartu yang cepat dan akurat.
+- **Kontrol Palang Pintar (Servo)**: Pergerakan motor servo Micro SG90 secara halus (*smooth movement*) saat akses diberikan maupun ditutup kembali.
+- **Indikator Visual & Audio**: Dilengkapi LCD 16x2 I2C untuk menampilkan status sistem secara real-time dan Buzzer piezo untuk umpan balik suara interaktif (akses diterima, ditolak, atau waktu hitung mundur).
+- **Sistem Keamanan Anti-Brute Force**: Mekanisme penguncian otomatis sementara (*lockout*) jika terjadi kesalahan pemindaian kartu sebanyak 3 kali berturut-turut.
+- **Auto-Relock Timer**: Palang parkir akan menutup secara otomatis setelah jeda waktu tertentu pasca kendaraan melintas.
+
+---
+
+## 🛠 Tech Stack & Komponen
+
+### Bill of Materials (BOM)
+| Komponen | Jumlah | Fungsi Utama |
+| :--- | :---: | :--- |
+| **Arduino Uno (ATmega328P)** | 1 | Mikrokontroler pusat pemrosesan logika sistem |
+| **NFC Module V3 (PN532)** | 1 | Modul pembaca kartu/tag RFID/NFC (SPI Mode) |
+| **Micro Servo SG90** | 1 | Penggerak mekanis palang pintu parkir |
+| **16x2 LCD Display + I2C Backpack** | 1 | Layar informasi status sistem (SDA/SCL) |
+| **Active Buzzer** | 1 | Indikator suara peringatan dan konfirmasi |
+| **Breadboard & Jumper Wires** | Secukupnya | Media perangkaian sirkuit elektronik |
+
+### Diagram Wiring Interaktif
+```mermaid
+graph LR
+    subgraph Arduino["Arduino Uno (Microcontroller)"]
+      A_5V["5V"]
+      A_GND["GND"]
+      A_P8["Digital Pin 8 (Buzzer)"]
+      A_P9["Digital Pin 9 (Servo PWM)"]
+      A_P10["Digital Pin 10 (SS / NSS)"]
+      A_P11["Digital Pin 11 (MOSI)"]
+      A_P12["Digital Pin 12 (MISO)"]
+      A_P13["Digital Pin 13 (SCK)"]
+      A_A4["Analog A4 (SDA)"]
+      A_A5["Analog A5 (SCL)"]
+    end
+
+    subgraph NFC["PN532 NFC Module"]
+      N_VCC["VCC"]
+      N_GND["GND"]
+      N_SCK["SCK"]
+      N_MISO["MISO"]
+      N_MOSI["MOSI"]
+      N_SS["NSS / SC"]
+    end
+
+    subgraph Servo["Micro Servo SG90"]
+      S_VCC["Red (VCC)"]
+      S_GND["Brown (GND)"]
+      S_SIG["Orange (Signal)"]
+    end
+
+    subgraph LCD["16x2 LCD I2C"]
+      L_VCC["VCC"]
+      L_GND["GND"]
+      L_SDA["SDA"]
+      L_SCL["SCL"]
+    end
+
+    subgraph Buzzer["Active Buzzer"]
+      B_POS["(+) Pin"]
+      B_NEG["(-) Pin"]
+    end
+
+    A_5V --> N_VCC
+    A_5V --> S_VCC
+    A_5V --> L_VCC
+    
+    A_GND --> N_GND
+    A_GND --> S_GND
+    A_GND --> L_GND
+    A_GND --> B_NEG
+
+    A_P13 --> N_SCK
+    A_P12 --> N_MISO
+    A_P11 --> N_MOSI
+    A_P10 --> N_SS
+
+    A_P9 --> S_SIG
+    A_A4 --> L_SDA
+    A_A5 --> L_SCL
+    A_P8 --> B_POS
+```
+
+### Tabel Pinout Lengkap
+| Komponen | Pin Modul / Sensor | Pin Arduino Uno | Level Tegangan | Keterangan |
+| :--- | :--- | :--- | :--- | :--- |
+| **PN532 NFC** | VCC | 5V | 5V | Catu daya modul |
+| | GND | GND | 0V | Ground bersama |
+| | SCK | Pin 13 | 5V | SPI Serial Clock |
+| | MISO | Pin 12 | 5V | SPI Master In Slave Out |
+| | MOSI | Pin 11 | 5V | SPI Master Out Slave In |
+| | SS (NSS) | Pin 10 | 5V | SPI Slave Select |
+| **Micro Servo** | Signal (Orange) | Pin 9 (PWM) | 5V | Kontrol sudut lengan servo |
+| | VCC (Red) | 5V | 5V | Catu daya motor servo |
+| | GND (Brown) | GND | 0V | Ground bersama |
+| **LCD 16x2 I2C** | SDA | Analog A4 | 5V | I2C Data Line |
+| | SCL | Analog A5 | 5V | I2C Clock Line |
+| **Buzzer** | Positive (+) | Pin 8 | 5V | Output sinyal nada/alarm |
+
+---
+
+## 🚀 Cara Pemasangan & Persiapan
+
+Ikuti langkah-langkah di bawah ini untuk merakit dan mengunggah kode sumber ke perangkat Arduino Uno:
+
+### 1. Kloning Repositori
+Buka terminal pada komputer Anda dan jalankan perintah berikut:
+```bash
+git clone https://github.com/saecar/parking-system.git
+cd parking-system
+```
+
+### 2. Instalasi Dependensi & Library
+Pastikan Anda menggunakan **Arduino IDE** atau **PlatformIO**. Instal library pendukung berikut melalui *Library Manager* Arduino IDE:
+- `SPI.h` (Bawaan Arduino)
+- `Wire.h` (Bawaan Arduino)
+- `Servo` (oleh Michael Margolis)
+- `Adafruit PN532` (oleh Adafruit)
+- `LiquidCrystal_I2C` (oleh Frank de Brabander)
+
+### 3. Konfigurasi Perangkat Keras
+1. Rangkai komponen di atas *breadboard* sesuai dengan **Tabel Pinout** dan **Diagram Wiring** di atas.
+2. Pastikan sambungan kabel jumper kuat dan tidak ada arus pendek (*short circuit*) pada jalur daya 5V dan GND.
+
+### 4. Unggah Firmware
+1. Hubungkan Arduino Uno ke komputer menggunakan kabel USB.
+2. Buka berkas `.ino` utama melalui Arduino IDE.
+3. Pilih board yang sesuai:
+   - **Board**: `Arduino Uno`
+   - **Port**: Pilih port COM yang terdeteksi (contoh: `COM3` atau `/dev/ttyUSB0`)
+4. Klik tombol **Upload** (panah kanan) pada Arduino IDE.
+
+---
+
+## 📂 Struktur Folder
+
+```text
+parking-system/
+├── secure_door.ino         # Kode sumber utama firmware mikrokontroler
+├── assets/                 # Direktori aset dokumentasi (skema, gambar)
+├── .gitignore              # Berkas pengecualian Git
+└── README.md               # Dokumentasi resmi proyek (Panduan & Spesifikasi)
+```
+
+---
+
+## 🤝 Kontribusi & Lisensi
+
+Kontribusi, laporan bug, dan permintaan fitur sangat dipersilakan! Silakan buat *Pull Request* atau buka *Issue* baru pada repositori ini.
+
+Proyek ini dilisensikan di bawah lisensi **MIT** - lihat berkas [LICENSE](LICENSE) untuk detail lebih lanjut.
