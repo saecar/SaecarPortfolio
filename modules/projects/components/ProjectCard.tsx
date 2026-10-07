@@ -8,6 +8,33 @@ import SpotlightCard from "@/common/components/elements/SpotlightCard";
 import { ProjectItem } from "@/common/types/projects";
 import { STACKS } from "@/common/constants/stacks";
 
+const getCategoryBadge = (cat?: string) => {
+  if (!cat) return null;
+  const lower = cat.toLowerCase();
+  if (lower === "iot") {
+    return {
+      label: "IoT",
+      className: "bg-emerald-500/90 text-neutral-950 font-bold border-emerald-400/50",
+    };
+  }
+  if (lower === "game") {
+    return {
+      label: "Game",
+      className: "bg-purple-500/90 text-neutral-950 font-bold border-purple-400/50",
+    };
+  }
+  if (lower.startsWith("web")) {
+    return {
+      label: lower === "web-frontend" ? "Frontend" : lower === "web-backend" ? "Backend" : lower === "web-fullstack" ? "Fullstack" : "Web",
+      className: "bg-sky-500/90 text-neutral-950 font-bold border-sky-400/50",
+    };
+  }
+  return {
+    label: cat.toUpperCase(),
+    className: "bg-neutral-700/90 text-neutral-100 font-semibold border-neutral-600",
+  };
+};
+
 const ProjectCard = ({
   title,
   slug,
@@ -15,8 +42,10 @@ const ProjectCard = ({
   image,
   stacks,
   is_featured,
+  category,
 }: ProjectItem) => {
   const t = useTranslations("ProjectsPage");
+  const catBadge = getCategoryBadge(category);
 
   const trimmedContent =
     description.slice(0, 85) + (description.length > 85 ? "..." : "");
@@ -24,6 +53,11 @@ const ProjectCard = ({
   return (
     <Link href={`/projects/${slug}`}>
       <SpotlightCard className="group relative cursor-pointer">
+        {catBadge && (
+          <div className={`absolute left-3 top-3 z-10 rounded-md px-2 py-0.5 text-[11px] uppercase tracking-wider shadow-sm border ${catBadge.className}`}>
+            {catBadge.label}
+          </div>
+        )}
         {is_featured && (
           <div className="absolute right-0 top-0 z-10 flex items-center gap-x-1 rounded-bl-lg rounded-tr-lg bg-primary px-2 py-1 text-sm font-medium text-neutral-900">
             <PinIcon size={15} />
@@ -32,7 +66,7 @@ const ProjectCard = ({
         )}
         <div className="relative">
           <Image
-            src={image}
+            src={image || "/images/placeholder.webp"}
             alt={title}
             width={450}
             height={200}
@@ -50,12 +84,23 @@ const ProjectCard = ({
           <p className="text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
             {trimmedContent}
           </p>
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            {stacks.map((stack: string, index: number) => {
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            {(stacks || []).slice(0, 6).map((stack: string, index: number) => {
               const stackData = STACKS[stack];
 
+              if (!stackData) {
+                return (
+                  <span
+                    key={index}
+                    className="rounded-md border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600 dark:border-neutral-800 dark:bg-neutral-800/80 dark:text-neutral-400"
+                  >
+                    {stack}
+                  </span>
+                );
+              }
+
               return (
-                <div key={index} className={`${stackData.color}`}>
+                <div key={index} className={`${stackData.color}`} title={stack}>
                   {stackData.icon}
                 </div>
               );

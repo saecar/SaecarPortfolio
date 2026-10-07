@@ -26,13 +26,24 @@ const ProjectDetail = ({
             {t("tech_stack")} :{" "}
           </span>
           <div className="flex flex-wrap items-center gap-3">
-            {stacks.map((stack: string, index: number) => {
+            {(stacks || []).map((stack: string, index: number) => {
               const stackData = STACKS[stack];
+
+              if (!stackData) {
+                return (
+                  <span
+                    key={index}
+                    className="rounded-md border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:border-neutral-800 dark:bg-neutral-800/80 dark:text-neutral-400"
+                  >
+                    {stack}
+                  </span>
+                );
+              }
 
               return (
                 <Tooltip title={stack} key={index}>
                   <div className={`${stackData.color}`}>
-                    {STACKS[stack].icon}
+                    {stackData.icon}
                   </div>
                 </Tooltip>
               );
@@ -48,7 +59,7 @@ const ProjectDetail = ({
 
       <div className="overflow-hidden">
         <Image
-          src={image}
+          src={image || "/images/placeholder.webp"}
           alt={title}
           width={1000}
           height={400}

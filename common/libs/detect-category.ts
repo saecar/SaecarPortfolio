@@ -13,29 +13,44 @@ export function detectCategory(payload: {
   const pkg = payload.packageJson || {};
 
   // 1) Explicit topic override
-  if (topics.includes("iot")) return "iot";
-  if (topics.includes("game")) return "game";
-  if (topics.includes("web") || topics.includes("frontend") || topics.includes("backend")) return "web";
+  if (topics.some((t) => ["iot", "arduino", "esp32", "esp8266", "raspberry-pi", "stm32", "embedded", "hardware", "firmware", "robotics", "sensors"].includes(t.toLowerCase()))) {
+    return "iot";
+  }
+  if (topics.some((t) => ["game", "gamedev", "unity", "godot", "unreal", "phaser", "threejs", "pixel-art", "game-engine", "pygame"].includes(t.toLowerCase()))) {
+    return "game";
+  }
+  if (topics.some((t) => ["web", "frontend", "backend", "fullstack", "nextjs", "react", "vue", "website"].includes(t.toLowerCase()))) {
+    return "web";
+  }
 
   // 2) File-based detection
   const paths = files.map((f) => f.path.toLowerCase());
 
-  // IoT: PlatformIO, Arduino .ino, ESP32, Johnny-Five, firmware
+  // IoT: PlatformIO, Arduino .ino, ESP32, Johnny-Five, firmware, wokwi
   if (
-    paths.some((p) => p.includes("platformio.ini")) ||
-    paths.some((p) => p.endsWith(".ino")) ||
-    paths.some((p) => p.includes("particle") || p.includes("esp32") || p.includes("arduino")) ||
+    paths.some((p) => p.includes("platformio.ini") || p.endsWith(".ino") || p.includes("wokwi.toml") || p.includes("diagram.json")) ||
+    paths.some((p) => p.includes("particle") || p.includes("esp32") || p.includes("esp8266") || p.includes("arduino") || p.includes("stm32")) ||
     pkg.dependencies?.["johnny-five"] ||
-    pkg.devDependencies?.["johnny-five"]
+    pkg.devDependencies?.["johnny-five"] ||
+    pkg.dependencies?.["cylon"]
   ) return "iot";
 
-  // Game: Unity, Godot, Phaser, Three.js, PixiJS
+  // Game: Unity, Godot, Phaser, Three.js, PixiJS, Unreal
   if (
-    paths.some((p) => p.includes("projectsettings") || p.includes("assets/") || p.endsWith(".unity")) ||
+    paths.some((p) =>
+      p.includes("projectsettings") ||
+      p.includes("project.godot") ||
+      p.endsWith(".unity") ||
+      p.endsWith(".uproject") ||
+      p.includes("assets/scenes") ||
+      p.includes("assets/sprites")
+    ) ||
     pkg.dependencies?.["phaser"] ||
     pkg.dependencies?.["three"] ||
+    pkg.dependencies?.["@react-three/fiber"] ||
     pkg.dependencies?.["pixi.js"] ||
     pkg.dependencies?.["@godotengine"] ||
+    pkg.dependencies?.["kaboom"] ||
     pkg.name?.includes("game")
   ) return "game";
 
@@ -58,8 +73,9 @@ export function detectCategory(payload: {
   if (hasBackend) return "web-backend";
 
   // 3) Name heuristic
-  if (payload.name.toLowerCase().includes("iot")) return "iot";
-  if (payload.name.toLowerCase().includes("game")) return "game";
+  const lowerName = payload.name.toLowerCase();
+  if (lowerName.includes("iot") || lowerName.includes("esp32") || lowerName.includes("arduino") || lowerName.includes("sensor")) return "iot";
+  if (lowerName.includes("game") || lowerName.includes("unity") || lowerName.includes("godot") || lowerName.includes("adventure") || lowerName.includes("quest")) return "game";
 
   // 4) Default fallback
   return "web";

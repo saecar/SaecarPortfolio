@@ -10,6 +10,8 @@ export type ProjectItem = {
   content?: string | null;
   is_show: boolean;
   is_featured: boolean;
+  category?: "iot" | "game" | "web" | "web-frontend" | "web-backend" | "web-fullstack" | string;
+  auto_generated?: boolean;
 };
 
 export type ProjectItemProps = {
