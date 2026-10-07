@@ -1,5 +1,4 @@
 import Codewars from "./Codewars";
-import Monkeytype from "./Monkeytype";
 import CodingActive from "./CodingActive";
 import Contributions from "./Contributions";
 
@@ -18,8 +17,6 @@ const Dashboard = () => {
       <CodingActive />
       <Breakline className="my-8" />
       <Codewars endpoint={CODEWARS_ACCOUNT.endpoint} />
-      {/* <Breakline className="my-8" /> */}
-      <Monkeytype />
     </>
   );
 };

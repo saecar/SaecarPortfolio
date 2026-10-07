@@ -91,18 +91,22 @@ const mergeData = (allResults: UmamiResponse[]): UmamiResponse => {
   };
 
   allResults.forEach((result) => {
+    if (!result) return;
     combined.websiteStats.pageviews.value +=
-      result.websiteStats.pageviews.value;
-    combined.websiteStats.visitors.value += result.websiteStats.visitors.value;
-    combined.websiteStats.visits.value += result.websiteStats.visits.value;
-    combined.websiteStats.events.value += result.websiteStats.events.value;
+      result?.websiteStats?.pageviews?.value ?? 0;
+    combined.websiteStats.visitors.value +=
+      result?.websiteStats?.visitors?.value ?? 0;
+    combined.websiteStats.visits.value +=
+      result?.websiteStats?.visits?.value ?? 0;
+    combined.websiteStats.events.value +=
+      result?.websiteStats?.events?.value ?? 0;
     combined.websiteStats.countries.value = Math.max(
       combined.websiteStats.countries.value,
-      result.websiteStats.countries.value,
+      result?.websiteStats?.countries?.value ?? 0,
     );
 
-    const mergeChart = (target: UmamiDataPoint[], source: UmamiDataPoint[]) => {
-      source.forEach((item) => {
+    const mergeChart = (target: UmamiDataPoint[], source?: UmamiDataPoint[]) => {
+      (source || []).forEach((item) => {
         const existing = target.find((p) => p.x === item.x);
         if (existing) existing.y += item.y;
         else target.push({ ...item });
@@ -124,16 +128,36 @@ const mergeData = (allResults: UmamiResponse[]): UmamiResponse => {
 };
 
 export const getAllWebsiteData = async (): Promise<UmamiResponse> => {
-  const { websites } = UMAMI_ACCOUNT;
+  const { websites, api_key } = UMAMI_ACCOUNT;
+
+  if (!api_key || api_key === "your_umami_api_key") {
+    return {
+      pageviews: [],
+      sessions: [],
+      websiteStats: {
+        pageviews: { value: 0 },
+        visitors: { value: 0 },
+        visits: { value: 0 },
+        countries: { value: 0 },
+        events: { value: 0 },
+      },
+    };
+  }
 
   const results = await Promise.all(
     websites.map(async (w) => {
       const pv = await getPageViewsByDataRange(w.domain);
       const st = await getWebsiteStats(w.domain);
       return {
-        pageviews: pv.data.pageviews,
-        sessions: pv.data.sessions,
-        websiteStats: st.data,
+        pageviews: pv?.data?.pageviews || [],
+        sessions: pv?.data?.sessions || [],
+        websiteStats: st?.data || {
+          pageviews: { value: 0 },
+          visitors: { value: 0 },
+          visits: { value: 0 },
+          countries: { value: 0 },
+          events: { value: 0 },
+        },
       };
     }),
   );

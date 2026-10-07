@@ -28,10 +28,10 @@ const Umami = () => {
   const searchParams = useSearchParams();
   const domain = searchParams.get("domain") || "all";
 
-  const key = `/api/umami?domain=${domain}`;
+  const { is_active } = UMAMI_ACCOUNT;
+  const key = is_active ? `/api/umami?domain=${domain}` : null;
 
   const { data, isLoading, error } = useSWR(key, fetcher);
-  const { is_active } = UMAMI_ACCOUNT;
   const t = useTranslations("DashboardPage");
 
   if (!is_active) return null;

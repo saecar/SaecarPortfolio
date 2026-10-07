@@ -89,23 +89,10 @@ const Calendar = ({ data }: CalendarProps) => {
                 const backgroundColor =
                   contribution.contributionCount > 0 ? customColor : null;
 
-                const getRandomDelayAnimate =
-                  Math.random() * week.contributionDays.length * 0.15;
-
                 return (
-                  <motion.span
+                  <span
                     key={contribution.date}
-                    initial="initial"
-                    animate="animate"
-                    variants={{
-                      initial: { opacity: 0, translateY: -20 },
-                      animate: {
-                        opacity: 1,
-                        translateY: 0,
-                        transition: { delay: getRandomDelayAnimate },
-                      },
-                    }}
-                    className="my-[2px] block h-[12px] w-[12px] rounded-sm bg-neutral-300 dark:bg-neutral-800"
+                    className="my-[2px] block h-[12px] w-[12px] rounded-sm bg-neutral-300 dark:bg-neutral-800 transition-colors duration-150"
                     style={backgroundColor ? { backgroundColor } : undefined}
                     onMouseEnter={() =>
                       setSelectContribution({

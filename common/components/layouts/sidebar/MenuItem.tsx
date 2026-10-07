@@ -119,6 +119,7 @@ const MenuItem = ({
       aria-current={isActive ? "page" : undefined}
       href={href}
       target={isExternalUrl ? "_blank" : ""}
+      prefetch={!isExternalUrl}
       onClick={handleClick}
     >
       {itemComponent()}

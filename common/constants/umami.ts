@@ -14,7 +14,13 @@ export const UMAMI_ACCOUNT = {
       timezone: "Asia/Jakarta",
     };
   },
-  is_active: true,
+  get is_active() {
+    return Boolean(
+      process.env.UMAMI_API_KEY &&
+        process.env.UMAMI_API_KEY !== "your_umami_api_key" &&
+        process.env.UMAMI_API_KEY.length > 5,
+    );
+  },
   websites: [
     {
       domain: "satriabahari.my.id",

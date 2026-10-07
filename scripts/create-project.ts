@@ -246,7 +246,8 @@ async function createGithubRepo(name: string, description: string, isPrivate: bo
 
 async function triggerVercelDeploy(projectName: string, repoFullName: string): Promise<string | null> {
   if (!VERCEL_TOKEN || VERCEL_TOKEN === "your_vercel_token") {
-    return `https://${projectName}.vercel.app`;
+    console.log("ℹ️ VERCEL_TOKEN belum diatur di .env. Hubungkan repo secara manual di dashboard Vercel.");
+    return null;
   }
 
   try {
@@ -256,7 +257,7 @@ async function triggerVercelDeploy(projectName: string, repoFullName: string): P
       "Content-Type": "application/json",
     };
 
-    await axios.post(
+    const res = await axios.post(
       `https://api.vercel.com/v9/projects`,
       {
         name: projectName,
@@ -269,11 +270,33 @@ async function triggerVercelDeploy(projectName: string, repoFullName: string): P
       { headers }
     );
 
-    console.log(`✅ Berhasil menghubungkan Frontend ke Vercel!`);
-    return `https://${projectName}.vercel.app`;
+    const projectId = res.data?.id;
+    if (projectId) {
+      try {
+        await axios.post(
+          `https://api.vercel.com/v13/deployments`,
+          {
+            name: projectName,
+            project: projectId,
+            gitSource: {
+              type: "github",
+              ref: "main",
+              repoId: res.data?.link?.repoId,
+            },
+          },
+          { headers }
+        );
+        console.log(`🚀 Deployment Vercel berhasil dipicu!`);
+      } catch {
+        console.log(`ℹ️ Project Vercel terhubung ke GitHub (${repoFullName}). Deployment otomatis aktif.`);
+      }
+      return `https://${projectName}.vercel.app`;
+    }
+
+    return null;
   } catch (err: any) {
     console.warn("⚠️ Vercel API response:", err.response?.data?.error?.message || err.message);
-    return `https://${projectName}.vercel.app`;
+    return null;
   }
 }
 
@@ -283,12 +306,14 @@ async function triggerBackendDeploy({
   repoFullName,
   deployUrl,
 }: {
-  platform: "render" | "railway" | "vercel" | "custom";
+  platform: "render" | "railway" | "vercel" | "custom" | "none";
   slug: string;
   repoFullName: string;
   deployUrl?: string;
 }): Promise<string | null> {
-  console.log(`⚡ Menginisialisasi deployment Backend (${platform.toUpperCase()})...`);
+  if (platform === "none") return null;
+
+  console.log(`⚙️ Mengonfigurasi deployment Backend (${platform.toUpperCase()})...`);
 
   if (platform === "render") {
     const hook = deployUrl || process.env.RENDER_DEPLOY_HOOK;
@@ -296,11 +321,16 @@ async function triggerBackendDeploy({
       try {
         await axios.post(hook);
         console.log(`✅ Berhasil memicu deploy hook Render!`);
+        return (deployUrl && deployUrl.includes("http") && !deployUrl.includes("deploy"))
+          ? deployUrl
+          : `https://${slug}.onrender.com`;
       } catch (e: any) {
         console.warn(`⚠️ Render deploy hook response:`, e.message);
       }
+    } else {
+      console.log(`ℹ️ Render: Buat Web Service baru di https://dashboard.render.com dan hubungkan repo https://github.com/${repoFullName}`);
     }
-    return `https://${slug}.onrender.com`;
+    return deployUrl || null;
   }
 
   if (platform === "railway") {
@@ -309,11 +339,14 @@ async function triggerBackendDeploy({
       try {
         await axios.post(hook);
         console.log(`✅ Berhasil memicu webhook Railway!`);
+        return `https://${slug}.up.railway.app`;
       } catch (e: any) {
         console.warn(`⚠️ Railway webhook response:`, e.message);
       }
+    } else {
+      console.log(`ℹ️ Railway: Buka https://railway.app/new dan pilih 'Deploy from GitHub repo' -> https://github.com/${repoFullName}`);
     }
-    return `https://${slug}.up.railway.app`;
+    return deployUrl || null;
   }
 
   if (platform === "vercel") {
@@ -324,13 +357,13 @@ async function triggerBackendDeploy({
     try {
       await axios.post(deployUrl);
       console.log(`✅ Berhasil memicu custom webhook!`);
+      return deployUrl;
     } catch (e: any) {
       console.warn(`⚠️ Custom webhook response:`, e.message);
     }
-    return deployUrl;
   }
 
-  return null;
+  return deployUrl || null;
 }
 
 function scanBackendSourceFiles(projectPath: string): { files: string[]; snippet: string } {
@@ -398,9 +431,17 @@ function scanBackendSourceFiles(projectPath: string): { files: string[]; snippet
 
 async function processAndUploadProjectImage({
   slug,
+  title,
+  category,
+  description,
+  stacks = [],
   imageSource,
 }: {
   slug: string;
+  title: string;
+  category: ProjectCategory;
+  description: string;
+  stacks?: string[];
   imageSource: { type: "file" | "url" | "none"; pathOrUrl?: string };
 }): Promise<string | null> {
   const supa = createServiceClient();
@@ -440,6 +481,40 @@ async function processAndUploadProjectImage({
       imageBuffer = fs.readFileSync(localFilePath);
     }
 
+    // AUTO GENERATE DENGAN AI JIKA BELUM ADA GAMBAR (DEFAULT)
+    if (!imageBuffer) {
+      console.log(`🎨 Menghasilkan visual proyek AI berkualitas tinggi (Flux Engine)...`);
+      try {
+        let aiPrompt = "";
+        const isBackend =
+          category === "web-backend" ||
+          description.toLowerCase().includes("api") ||
+          description.toLowerCase().includes("backend") ||
+          stacks.some((s) => ["laravel", "express", "fastapi", "django", "nest", "go", "php"].includes(s.toLowerCase()));
+
+        if (category === "iot") {
+          aiPrompt = `Professional macro photography of IoT hardware engineering project workbench, circuit breadboard, microcontroller, sensors, neat jumper wires, sleek dark electronics lab, cyan amber cinematic lighting, 16:9 ratio, photorealistic`;
+        } else if (category === "game") {
+          aiPrompt = `Cinematic game development concept artwork for ${title}, stylized unreal engine atmosphere, dramatic cinematic lighting, 16:9 ratio, high resolution`;
+        } else if (isBackend) {
+          aiPrompt = `Modern dark developer workstation displaying RESTful API telemetry and microservice backend network architecture, sleek code terminal, cyan amber glowing nodes, 16:9 ratio, professional commercial tech photography`;
+        } else {
+          aiPrompt = `Sleek modern web application dashboard interface mockup for ${title}, dark mode, clean glassmorphism UI cards, data charts, elegant typography, 16:9 landscape aspect ratio`;
+        }
+
+        const aiUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1200&height=675&nologo=true&model=flux`;
+        const res = await axios.get(aiUrl, {
+          responseType: "arraybuffer",
+          timeout: 30000,
+          headers: { "User-Agent": "Portfolio-AI-Visualizer" },
+        });
+        imageBuffer = Buffer.from(res.data);
+        console.log(`✅ Berhasil auto-generate visual AI untuk ${title}!`);
+      } catch (aiErr: any) {
+        console.warn(`⚠️ Gagal auto-generate gambar AI: ${aiErr.message}`);
+      }
+    }
+
     if (imageBuffer) {
       const webpBuf = await sharp(imageBuffer)
         .resize(1200, 675, { fit: "cover", position: "center" })
@@ -449,21 +524,32 @@ async function processAndUploadProjectImage({
       fs.writeFileSync(localFilePath, webpBuf);
       console.log(`💾 Gambar tersimpan di: public/images/projects/${slug}.webp`);
 
-      const { error } = await supa.storage.from("projects").upload(`${slug}.webp`, webpBuf, {
-        contentType: "image/webp",
-        upsert: true,
-      });
+      let publicUrl: string | null = null;
+      try {
+        const { error } = await supa.storage.from("projects").upload(`${slug}.webp`, webpBuf, {
+          contentType: "image/webp",
+          upsert: true,
+        });
 
-      if (!error) {
-        console.log(`☁️ Berhasil upload gambar ke Supabase Storage (projects/${slug}.webp)`);
-        const { data: urlData } = supa.storage.from("projects").getPublicUrl(`${slug}.webp`);
-        return urlData.publicUrl;
-      } else {
-        console.warn(`⚠️ Supabase Storage upload note: ${error.message}`);
+        if (!error) {
+          console.log(`☁️ Berhasil upload gambar ke Supabase Storage (projects/${slug}.webp)`);
+          const { data: urlData } = supa.storage.from("projects").getPublicUrl(`${slug}.webp`);
+          publicUrl = urlData?.publicUrl || null;
+        } else {
+          console.warn(`⚠️ Supabase Storage upload note: ${error.message}`);
+        }
+      } catch (uploadErr: any) {
+        console.warn(`⚠️ Supabase Storage upload error: ${uploadErr.message}`);
       }
+
+      return publicUrl || `/images/projects/${slug}.webp`;
     }
   } catch (err: any) {
     console.warn(`⚠️ Catatan pemrosesan gambar: ${err.message}`);
+  }
+
+  if (fs.existsSync(localFilePath)) {
+    return `/images/projects/${slug}.webp`;
   }
 
   return null;
@@ -746,8 +832,9 @@ PILIHAN ARGUMEN:
     }
   }
 
-  if (!linkDemo && category === "web") {
-    linkDemo = `https://${slug}.vercel.app`;
+  // linkDemo tetap kosong kecuali diisi user atau berhasil dideploy
+  if (flags.demo) {
+    linkDemo = String(flags.demo);
   }
 
   // Pengaturan Backend & Pendeployan Tambahan
@@ -761,22 +848,21 @@ PILIHAN ARGUMEN:
     if (askApi.toLowerCase() === "y") {
       generateApiDoc = true;
       console.log(`\nPilih Platform Pendeployan Backend:`);
-      console.log(`  1) Monolith / Serverless Vercel (Frontend & Backend jadi 1 di Vercel)`);
+      console.log(`  1) Railway.app (Rekomendasi untuk Node/Python/Go/Laravel)`);
       console.log(`  2) Render.com (via Render Deploy Hook)`);
-      console.log(`  3) Railway.app (via Railway Webhook)`);
-      console.log(`  4) Vercel Project ke-2 (folder /backend atau microservice terpisah)`);
-      console.log(`  5) Custom Deploy Webhook`);
-      console.log(`  6) Lewati deployment backend`);
-      const choice = await ask(rl, "Pilihan platform backend (1-6)", "1");
-      if (choice === "2") {
-        backendDeployPlatform = "render";
-        backendDeployUrl = await ask(rl, "Masukkan Render Deploy Hook URL (tekan Enter jika belum ada)");
-      } else if (choice === "3") {
+      console.log(`  3) Vercel Serverless (Next.js API Routes / Serverless functions)`);
+      console.log(`  4) Custom Deploy Webhook`);
+      console.log(`  5) Lewati deployment backend (hanya simpan dokumentasi API)`);
+      const choice = await ask(rl, "Pilihan platform backend (1-5)", "1");
+      if (choice === "1") {
         backendDeployPlatform = "railway";
-        backendDeployUrl = await ask(rl, "Masukkan Railway Webhook URL (tekan Enter jika belum ada)");
-      } else if (choice === "4") {
+        backendDeployUrl = await ask(rl, "Masukkan Railway Live URL / Webhook (tekan Enter jika belum dideploy)");
+      } else if (choice === "2") {
+        backendDeployPlatform = "render";
+        backendDeployUrl = await ask(rl, "Masukkan Render Deploy Hook / Live URL (tekan Enter jika belum ada)");
+      } else if (choice === "3") {
         backendDeployPlatform = "vercel";
-      } else if (choice === "5") {
+      } else if (choice === "4") {
         backendDeployPlatform = "custom";
         backendDeployUrl = await ask(rl, "Masukkan Custom Webhook URL");
       } else {
@@ -793,17 +879,16 @@ PILIHAN ARGUMEN:
   let imageSource: { type: "file" | "url" | "none"; pathOrUrl?: string } = { type: "none" };
 
   async function promptImageConfig(): Promise<void> {
-    const isFrontend = category === "web" || category === "web-frontend" || category === "web-fullstack";
+    const isFrontend =
+      category === "web" || category === "web-frontend" || category === "web-fullstack";
+
     if (isFrontend) {
-      console.log(`\n📸 PENGATURAN GAMBAR FRONTEND (Wajib dari UI Frontend asli, BUKAN AI slop):`);
-      console.log(`  1) Screenshot otomatis dari Live URL Demo / Localhost`);
-      console.log(`  2) Masukkan path file screenshot lokal (PNG/JPG/WebP)`);
-      console.log(`  3) Lewati (gunakan default)`);
-      const imgChoice = await ask(rl, "Pilihan gambar (1/2/3)", linkDemo ? "1" : "2");
+      console.log(`\n📸 PENGATURAN GAMBAR FRONTEND (Dibutuhkan UI Asli, bukan AI slop):`);
+      console.log(`  1) Masukkan path file screenshot lokal UI Anda (PNG/JPG/WebP)`);
+      console.log(`  2) Screenshot otomatis dari Live URL Demo / Localhost`);
+      console.log(`  3) Auto-generate AI visual preview (Default jika belum ada screenshot)`);
+      const imgChoice = await ask(rl, "Pilihan gambar (1/2/3)", "3");
       if (imgChoice === "1") {
-        const targetUrl = await ask(rl, "URL Web untuk di-screenshot", linkDemo || "http://localhost:3000");
-        imageSource = { type: "url", pathOrUrl: targetUrl };
-      } else if (imgChoice === "2") {
         while (true) {
           const p = await ask(rl, "Masukkan path file screenshot lokal", "");
           if (!p.trim()) {
@@ -817,14 +902,17 @@ PILIHAN ARGUMEN:
           }
           console.log(`⚠️ File "${resolved}" tidak ditemukan. Coba lagi.`);
         }
+      } else if (imgChoice === "2") {
+        const targetUrl = await ask(rl, "URL Web untuk di-screenshot", linkDemo || "http://localhost:3000");
+        imageSource = { type: "url", pathOrUrl: targetUrl };
       } else {
         imageSource = { type: "none" };
       }
     } else {
       console.log(`\n🎨 PENGATURAN GAMBAR PROYEK (${category.toUpperCase()}):`);
       console.log(`  1) Gunakan file gambar sendiri (Foto rakitan IoT / poster game / diagram)`);
-      console.log(`  2) Lewati (gunakan default atau gambar yang sudah ada)`);
-      const imgChoice = await ask(rl, "Pilihan gambar (1/2)", "1");
+      console.log(`  2) Auto-generate dengan AI (Default - Berkualitas tinggi via Flux Engine)`);
+      const imgChoice = await ask(rl, "Pilihan gambar (1/2)", "2");
       if (imgChoice === "1") {
         while (true) {
           const p = await ask(rl, "Masukkan path file gambar (PNG/JPG/WebP)", "");
@@ -1096,7 +1184,11 @@ PILIHAN ARGUMEN:
   // ==========================================================
   // STEP 5: DEPLOYMENTS (FRONTEND & BACKEND)
   // ==========================================================
-  if (!flags.dryRun && !flags.skipVercel && (category === "web" || category === "web-frontend" || category === "web-fullstack")) {
+  if (
+    !flags.dryRun &&
+    !flags.skipVercel &&
+    (category === "web" || category === "web-frontend" || category === "web-fullstack")
+  ) {
     console.log(`▲ 5/7 Konfigurasi Deployment Frontend (Vercel)...`);
     const liveUrl = await triggerVercelDeploy(slug, `${GITHUB_USERNAME}/${slug}`);
     if (liveUrl) linkDemo = liveUrl;
@@ -1105,13 +1197,16 @@ PILIHAN ARGUMEN:
   }
 
   if (!flags.dryRun && backendDeployPlatform !== "none") {
-    console.log(`⚙️ 5b/7 Memicu pendeployan Backend (${backendDeployPlatform.toUpperCase()})...`);
-    await triggerBackendDeploy({
+    console.log(`⚙️ 5b/7 Mengonfigurasi deployment Backend (${backendDeployPlatform.toUpperCase()})...`);
+    const backendLiveUrl = await triggerBackendDeploy({
       platform: backendDeployPlatform as any,
       slug,
       repoFullName: `${GITHUB_USERNAME}/${slug}`,
       deployUrl: backendDeployUrl,
     });
+    if (backendLiveUrl && !linkDemo) {
+      linkDemo = backendLiveUrl;
+    }
   }
 
   // ==========================================================
@@ -1121,6 +1216,10 @@ PILIHAN ARGUMEN:
   console.log(`🖼️ 6/7 Memproses gambar proyek...`);
   uploadedImageUrl = await processAndUploadProjectImage({
     slug,
+    title: name,
+    category,
+    description,
+    stacks,
     imageSource,
   });
 

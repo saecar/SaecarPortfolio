@@ -19,8 +19,11 @@ interface CodewarsProps {
 }
 
 const Codewars = ({ endpoint }: CodewarsProps) => {
-  const { data, isLoading, error } = useSWR(endpoint, fetcher);
   const { codewars_url, is_active } = CODEWARS_ACCOUNT;
+  const { data, isLoading, error } = useSWR(
+    is_active ? endpoint : null,
+    fetcher,
+  );
 
   const t = useTranslations("DashboardPage");
 
