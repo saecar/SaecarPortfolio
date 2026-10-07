@@ -1,43 +1,59 @@
 import { createClient } from "@/common/utils/server";
 
 export const getProjectsData = async () => {
-  const supabase = createClient();
+  try {
+    const supabase = createClient();
 
-  let { data, error } = await supabase.from("projects").select();
+    let { data, error } = await supabase.from("projects").select();
 
-  if (error) throw new Error(error.message);
-  if (!data) return [];
+    if (error) {
+      console.error("[Supabase] Error fetching projects:", error.message);
+      return [];
+    }
+    if (!data) return [];
 
-  return data.map((item) => {
-    const { data: imageData } = supabase.storage
-      .from("projects")
-      .getPublicUrl(`${item.slug}.webp`);
+    return data.map((item) => {
+      const { data: imageData } = supabase.storage
+        .from("projects")
+        .getPublicUrl(`${item.slug}.webp`);
 
-    return {
-      ...item,
-      image: item.image || imageData.publicUrl,
-    };
-  });
+      return {
+        ...item,
+        image: item.image || imageData?.publicUrl,
+      };
+    });
+  } catch (err: any) {
+    console.error("[Projects] Exception in getProjectsData:", err.message);
+    return [];
+  }
 };
 
 export const getProjectsDataBySlug = async (slug: string) => {
-  const supabase = createClient();
+  try {
+    const supabase = createClient();
 
-  let { data, error } = await supabase
-    .from("projects")
-    .select()
-    .eq("slug", slug)
-    .single();
+    let { data, error } = await supabase
+      .from("projects")
+      .select()
+      .eq("slug", slug)
+      .maybeSingle();
 
-  if (error) throw new Error(error.message);
-  if (!data) return null;
+    if (error) {
+      console.error(`[Supabase] Error fetching project ${slug}:`, error.message);
+      return null;
+    }
+    if (!data) return null;
 
-  const { data: imageData } = supabase.storage
-    .from("projects")
-    .getPublicUrl(`${data.slug}.webp`);
+    const { data: imageData } = supabase.storage
+      .from("projects")
+      .getPublicUrl(`${data.slug}.webp`);
 
-  return {
-    ...data,
-    image: data.image || imageData.publicUrl,
-  };
+    return {
+      ...data,
+      image: data.image || imageData?.publicUrl,
+    };
+  } catch (err: any) {
+    console.error(`[Projects] Exception in getProjectsDataBySlug:`, err.message);
+    return null;
+  }
 };

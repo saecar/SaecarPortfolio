@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import BackButton from "@/common/components/elements/BackButton";
 import Container from "@/common/components/elements/Container";
@@ -16,11 +17,23 @@ interface ProjectDetailPageProps {
   };
 }
 
-const getProjectDetail = async (slug: string): Promise<ProjectItem> => {
-  const projects = await getProjectsDataBySlug(slug);
+const getProjectDetail = async (slug: string): Promise<ProjectItem | null> => {
+  const project = await getProjectsDataBySlug(slug);
   const contents = loadMdxFiles();
   const content = contents.find((item) => item.slug === slug);
-  const response = { ...projects, content: content?.content };
+
+  if (!project && !content) {
+    return null;
+  }
+
+  const response = {
+    ...(project || {}),
+    title: project?.title || content?.frontMatter?.title || slug,
+    description: project?.description || content?.frontMatter?.description || "",
+    slug,
+    content: content?.content,
+  };
+
   return JSON.parse(JSON.stringify(response));
 };
 
@@ -29,6 +42,12 @@ export const generateMetadata = async ({
 }: ProjectDetailPageProps): Promise<Metadata> => {
   const project = await getProjectDetail(params?.slug);
   const locale = params.locale || "en";
+
+  if (!project || !project.title) {
+    return {
+      title: `Project Not Found ${METADATA.exTitle}`,
+    };
+  }
 
   return {
     title: `${project.title} ${METADATA.exTitle}`,
@@ -51,10 +70,14 @@ export const generateMetadata = async ({
 const ProjectDetailPage = async ({ params }: ProjectDetailPageProps) => {
   const data = await getProjectDetail(params?.slug);
 
+  if (!data || !data.title) {
+    notFound();
+  }
+
   return (
     <Container data-aos="fade-up">
       <BackButton url="/projects" />
-      <PageHeading title={data?.title} description={data?.description} />
+      <PageHeading title={data.title} description={data.description} />
       <ProjectDetail {...data} />
     </Container>
   );
