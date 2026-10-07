@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -7,8 +8,31 @@ import PageHeading from "@/common/components/elements/PageHeading";
 import ProjectDetail from "@/modules/projects/components/ProjectDetail";
 import { ProjectItem } from "@/common/types/projects";
 import { METADATA } from "@/common/constants/metadata";
-import { loadMdxFiles } from "@/common/libs/mdx";
-import { getProjectsDataBySlug } from "@/services/projects";
+import { getMdxBySlug, loadMdxFiles } from "@/common/libs/mdx";
+import { getProjectsData, getProjectsDataBySlug } from "@/services/projects";
+import { routing } from "@/i18n/routing";
+
+export const revalidate = 3600;
+
+export async function generateStaticParams() {
+  try {
+    const projects = await getProjectsData();
+    const mdxList = loadMdxFiles();
+    const slugSet = new Set<string>();
+
+    projects.forEach((p) => p.slug && slugSet.add(p.slug));
+    mdxList.forEach((m) => m.slug && slugSet.add(m.slug));
+
+    return routing.locales.flatMap((locale) =>
+      Array.from(slugSet).map((slug) => ({
+        locale,
+        slug,
+      })),
+    );
+  } catch {
+    return [];
+  }
+}
 
 interface ProjectDetailPageProps {
   params: {
@@ -17,10 +41,9 @@ interface ProjectDetailPageProps {
   };
 }
 
-const getProjectDetail = async (slug: string): Promise<ProjectItem | null> => {
+const getProjectDetail = cache(async (slug: string): Promise<ProjectItem | null> => {
   const project = await getProjectsDataBySlug(slug);
-  const contents = loadMdxFiles();
-  const content = contents.find((item) => item.slug === slug);
+  const content = getMdxBySlug(slug);
 
   if (!project && !content) {
     return null;
@@ -35,7 +58,7 @@ const getProjectDetail = async (slug: string): Promise<ProjectItem | null> => {
   };
 
   return JSON.parse(JSON.stringify(response));
-};
+});
 
 export const generateMetadata = async ({
   params,

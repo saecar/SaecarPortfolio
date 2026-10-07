@@ -22,12 +22,13 @@ const ProfileHeader = ({ expandMenu, imageSize }: ProfileHeaderProps) => {
       )}
     >
       <Image
-        src={"/images/satria.jpg"}
+        src={"/images/satria.webp"}
         width={expandMenu ? 80 : imageSize * 1}
         height={expandMenu ? 80 : imageSize * 1}
         alt="Satria Bahari"
         className="border-2 border-neutral-400 dark:border-neutral-600 lg:hover:scale-105"
         rounded="rounded-full"
+        priority
       />
 
       <div className="mt-1 flex items-center gap-2 lg:mt-4">

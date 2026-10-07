@@ -2,7 +2,12 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 export const createClient = () => {
-  const cookieStore = cookies();
+  let cookieStore: ReturnType<typeof cookies> | null = null;
+  try {
+    cookieStore = cookies();
+  } catch {
+    // cookies() is unavailable during build-time static generation
+  }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,7 +15,7 @@ export const createClient = () => {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          return cookieStore ? cookieStore.getAll() : [];
         },
         setAll(
           cookiesToSet: {
@@ -19,9 +24,10 @@ export const createClient = () => {
             options: CookieOptions;
           }[],
         ) {
+          if (!cookieStore) return;
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+              cookieStore?.set(name, value, options);
             });
           } catch (error) {
             // The `set` method was called from a Server Component.

@@ -63,11 +63,8 @@ const RootLayout = async ({
   return (
     <html lang={locale} suppressHydrationWarning={true}>
       <head>
-        <Script
-          defer
-          src="https://cloud.umami.is/script.js"
-          data-website-id="91c868c5-2a89-4a1d-b292-56c40ea30137"
-        />
+        <link rel="preconnect" href="https://cloud.umami.is" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://cloud.umami.is" />
       </head>
       <body className={inter.className}>
         <NextTopLoader
@@ -91,6 +88,11 @@ const RootLayout = async ({
           </NextAuthProvider>
         </NextIntlClientProvider>
         <Analytics />
+        <Script
+          src="https://cloud.umami.is/script.js"
+          data-website-id="91c868c5-2a89-4a1d-b292-56c40ea30137"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );

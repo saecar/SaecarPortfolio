@@ -6,6 +6,10 @@ import PageHeading from "@/common/components/elements/PageHeading";
 import Projects from "@/modules/projects";
 import { METADATA } from "@/common/constants/metadata";
 
+import { getProjectsData } from "@/services/projects";
+
+export const revalidate = 3600;
+
 interface ProjectsPageProps {
   params: { locale: string };
 }
@@ -27,11 +31,12 @@ export async function generateMetadata({
 
 const ProjectsPage = async ({ params: { locale } }: ProjectsPageProps) => {
   const t = await getTranslations({ locale, namespace: "ProjectsPage" });
+  const projects = await getProjectsData();
 
   return (
     <Container data-aos="fade-up">
       <PageHeading title={t("title")} description={t("description")} />
-      <Projects />
+      <Projects initialData={projects} />
     </Container>
   );
 };

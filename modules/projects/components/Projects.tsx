@@ -19,8 +19,14 @@ const CATEGORIES = [
   { key: "web", label: "Web Apps" },
 ];
 
-const Projects = () => {
-  const { data, isLoading, error } = useSWR("/api/projects", fetcher);
+interface ProjectsProps {
+  initialData?: ProjectItem[];
+}
+
+const Projects = ({ initialData }: ProjectsProps) => {
+  const { data, isLoading, error } = useSWR("/api/projects", fetcher, {
+    fallbackData: initialData,
+  });
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const t = useTranslations("ProjectsPage");
