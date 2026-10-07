@@ -301,7 +301,7 @@ export async function generateReadme(
 
   const apiKey = process.env.GEMINI_API_KEY;
   // Gunakan model yang stabil
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 
   if (!apiKey || apiKey === "your_gemini_api_key") {
     return fallbackReadme(options);
