@@ -13,7 +13,6 @@ import readline from "readline";
 import { execSync } from "child_process";
 import axios from "axios";
 import { generateReadme, ProjectCategory } from "../common/libs/readme-template";
-import { detectCategory } from "../common/libs/detect-category";
 import { createServiceClient } from "../common/utils/supabase-service";
 
 // Load environment variables if not already loaded
@@ -37,7 +36,6 @@ if (!process.env.GEMINI_API_KEY && fs.existsSync(path.join(process.cwd(), ".env"
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME || "saecar";
 const GITHUB_TOKEN = process.env.GITHUB_READ_USER_TOKEN_PERSONAL || process.env.PORTFOLIO_GITHUB_TOKEN;
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
-const PORTFOLIO_REPO = process.env.PORTFOLIO_REPO || `${GITHUB_USERNAME}/SaecarPortfolio`;
 
 function sanitizeSlug(title: string): string {
   const clean = title
@@ -184,7 +182,7 @@ out/
 
 async function createGithubRepo(name: string, description: string, isPrivate: boolean, topics: string[]) {
   if (!GITHUB_TOKEN || GITHUB_TOKEN === "your_github_token") {
-    console.warn("⚠️ GITHUB_READ_USER_TOKEN_PERSONAL belum diisi atau masih placeholder di .env!");
+    console.warn("⚠️ GITHUB_READ_USER_TOKEN_PERSONAL belum diisi di .env!");
     console.warn("  -> Melewati pembuatan otomatis repo di GitHub API.");
     return null;
   }
@@ -247,7 +245,6 @@ async function createGithubRepo(name: string, description: string, isPrivate: bo
 
 async function triggerVercelDeploy(projectName: string, repoFullName: string): Promise<string | null> {
   if (!VERCEL_TOKEN || VERCEL_TOKEN === "your_vercel_token") {
-    // Fallback standard live URL
     return `https://${projectName}.vercel.app`;
   }
 
@@ -258,8 +255,7 @@ async function triggerVercelDeploy(projectName: string, repoFullName: string): P
       "Content-Type": "application/json",
     };
 
-    // Check / Create project on Vercel
-    const createRes = await axios.post(
+    await axios.post(
       `https://api.vercel.com/v9/projects`,
       {
         name: projectName,
@@ -291,8 +287,7 @@ async function upsertSupabaseProject(data: {
 }) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supaUrl || supaUrl.includes("your_supabase_url")) {
-    console.warn("⚠️ NEXT_PUBLIC_SUPABASE_URL masih placeholder di .env!");
-    console.warn("  -> Melewati upsert database Supabase.");
+    console.warn("⚠️ NEXT_PUBLIC_SUPABASE_URL belum diisi di .env.");
     return false;
   }
 
@@ -313,7 +308,6 @@ async function upsertSupabaseProject(data: {
 
     const { error } = await supa.from("projects").upsert(row, { onConflict: "slug" }).select();
     if (error) {
-      // Fallback without category column if migration hasn't been run yet
       if (error.message.includes("category") || error.message.includes("column")) {
         const { category, auto_generated, last_synced_at, ...legacyRow } = row as any;
         const legacyRes = await supa.from("projects").upsert(legacyRow, { onConflict: "slug" });
@@ -325,7 +319,12 @@ async function upsertSupabaseProject(data: {
     console.log(`✅ Berhasil upsert proyek ke Supabase database!`);
     return true;
   } catch (err: any) {
-    console.error("❌ Gagal upsert ke Supabase:", err.message);
+    if (err.message.includes("schema cache") || err.message.includes("does not exist")) {
+      console.warn(`ℹ️ Catatan Supabase: Tabel 'projects' belum dibuat di database Supabase.`);
+      console.warn(`   (Jalankan query di supabase/schema.sql untuk membuat tabel kapan saja)`);
+    } else {
+      console.warn(`⚠️ Gagal upsert ke Supabase: ${err.message}`);
+    }
     return false;
   }
 }
@@ -375,167 +374,333 @@ PILIHAN ARGUMEN:
     output: process.stdout,
   });
 
-  // Step 1: Project Name
+  // State Variables
   let name = (flags.name as string) || "";
-  if (!name) {
-    name = await ask(rl, "📌 Masukkan Nama Proyek (contoh: Smart Greenhouse IoT)", "New Project");
-  }
-
-  // Step 2: Slug
-  let slug = (flags.slug as string) || sanitizeSlug(name);
-  if (!flags.slug && !flags.name) {
-    slug = await ask(rl, "🔗 Masukkan Slug URL", slug);
-  }
-  slug = sanitizeSlug(slug);
-
-  // Step 3: Category
-  let category = (flags.category as ProjectCategory) || ("" as any);
-  if (!category || !["iot", "game", "web"].includes(category)) {
-    console.log(`\n📂 Pilih Kategori Proyek:`);
-    console.log(`  1) IoT & Hardware (ESP32, Arduino, Raspberry Pi, Sensor, MQTT)`);
-    console.log(`  2) Game Development (Unity, Godot, Unreal, Phaser, Three.js)`);
-    console.log(`  3) Web Application (Next.js, React, Node.js, Supabase, Tailwind)`);
-    const catChoice = await ask(rl, "Pilih kategori (1/2/3)", "3");
-    if (catChoice === "1" || catChoice.toLowerCase() === "iot") category = "iot";
-    else if (catChoice === "2" || catChoice.toLowerCase() === "game") category = "game";
-    else category = "web";
-  }
-
-  // Step 4: Project Directory
+  let slug = (flags.slug as string) || "";
+  let category: ProjectCategory = (flags.category as ProjectCategory) || ("" as any);
   let projectPath = (flags.path as string) || "";
-  if (!projectPath) {
-    projectPath = await ask(rl, "📁 Path folder proyek", process.cwd());
-  }
-  projectPath = path.resolve(projectPath);
-
-  if (!fs.existsSync(projectPath)) {
-    fs.mkdirSync(projectPath, { recursive: true });
-    console.log(`📁 Membuat direktori proyek baru: ${projectPath}`);
-  }
-
-  // Step 5: IoT Source Code & Automatic Wiring Detection
   let sourceCodeSnippet = "";
-  if (category === "iot") {
+  let sourceCodeFile = "";
+  let descriptionHint = (flags.desc as string) || "";
+  let stacks: string[] = [];
+  let linkDemo = (flags.demo as string) || "";
+
+  // Helper Prompt Functions with robust loops
+  async function promptName(): Promise<string> {
+    while (true) {
+      const val = await ask(rl, "📌 Masukkan Nama Proyek (contoh: Parking System)", name || "New Project");
+      if (val.trim()) return val.trim();
+      console.log("⚠️ Nama proyek tidak boleh kosong! Coba lagi.");
+    }
+  }
+
+  async function promptSlug(currentName: string): Promise<string> {
+    const recommended = sanitizeSlug(currentName);
+    while (true) {
+      const val = await ask(rl, "🔗 Masukkan Slug URL", slug || recommended);
+      const clean = sanitizeSlug(val);
+      if (["iot", "game", "web"].includes(clean)) {
+        console.log(`⚠️ Peringatan: "${clean}" adalah nama kategori umum, bukan slug proyek unik.`);
+        const useRec = await ask(rl, `Gunakan rekomendasi "${recommended}"? (Y/n)`, "Y");
+        if (useRec.toLowerCase() !== "n") {
+          return recommended;
+        }
+      }
+      if (clean && clean.length >= 2) return clean;
+      console.log("⚠️ Slug URL minimal 2 karakter alfanumerik. Coba lagi.");
+    }
+  }
+
+  async function promptCategory(): Promise<ProjectCategory> {
+    while (true) {
+      console.log(`\n📂 Pilih Kategori Proyek:`);
+      console.log(`  1) IoT & Hardware (ESP32, Arduino, Sensor, Wiring Schematic, MQTT)`);
+      console.log(`  2) Game Development (Unity, Godot, Unreal, Controls, WebGL)`);
+      console.log(`  3) Web Application (Next.js, React, Node.js, Supabase, Tailwind)`);
+      const choice = await ask(rl, "Pilih kategori (1/2/3)", category === "iot" ? "1" : category === "game" ? "2" : "3");
+      const c = choice.trim().toLowerCase();
+      if (c === "1" || c === "iot" || c.includes("hardware")) return "iot";
+      if (c === "2" || c === "game") return "game";
+      if (c === "3" || c === "web") return "web";
+      console.log(`❌ Pilihan "${choice}" tidak valid. Harap masukkan angka 1, 2, atau 3.`);
+    }
+  }
+
+  async function promptProjectPath(): Promise<string> {
+    while (true) {
+      const defaultDir = projectPath || process.cwd();
+      const val = await ask(rl, "📁 Path folder proyek", defaultDir);
+      const resolved = path.resolve(val);
+
+      if (fs.existsSync(resolved)) {
+        return resolved;
+      }
+
+      console.log(`❓ Folder "${resolved}" belum ada.`);
+      const create = await ask(rl, "Buat folder baru ini? (Y/n)", "Y");
+      if (create.toLowerCase() !== "n") {
+        try {
+          fs.mkdirSync(resolved, { recursive: true });
+          console.log(`📁 Membuat direktori baru: ${resolved}`);
+          return resolved;
+        } catch (e: any) {
+          console.log(`❌ Gagal membuat folder: ${e.message}. Coba masukkan path lain.`);
+        }
+      } else {
+        console.log("Silakan masukkan path folder yang sudah ada.");
+      }
+    }
+  }
+
+  async function promptIotCode(currentPath: string): Promise<{ snippet: string; file: string }> {
+    // 1. Scan folder first
+    const scanned = scanIotSourceFiles(currentPath);
+    if (scanned.files.length > 0) {
+      console.log(`\n🔌 Ditemukan ${scanned.files.length} file firmware di folder: ${scanned.files.join(", ")}`);
+      console.log(`   -> AI akan otomatis mengekstrak pinout dan merender diagram wiring Mermaid!`);
+      return { snippet: scanned.snippet, file: scanned.files[0] };
+    }
+
+    // 2. Ask user for code path if not found in folder
+    while (true) {
+      console.log(`\n🔌 Belum ada file firmware (.ino/.cpp) di folder proyek.`);
+      console.log(`   Jika Anda memiliki file kode, AI dapat otomatis mendeteksi pinout & wiring diagram.`);
+      const val = await ask(rl, "Masukkan path file kode sumber (misal D:\\proyek\\sketch.ino) [Enter jika tidak ada]", "");
+      if (!val.trim()) {
+        return { snippet: "", file: "" };
+      }
+
+      const resolved = path.resolve(val);
+      if (fs.existsSync(resolved)) {
+        try {
+          const stat = fs.statSync(resolved);
+          if (stat.isFile()) {
+            const snippet = fs.readFileSync(resolved, "utf-8").slice(0, 15000);
+            console.log(`✅ Berhasil membaca kode sumber dari: ${resolved}`);
+
+            // Salin ke folder proyek src/ jika belum ada
+            const targetSrcDir = path.join(currentPath, "src");
+            if (!fs.existsSync(targetSrcDir)) fs.mkdirSync(targetSrcDir, { recursive: true });
+            const targetFile = path.join(targetSrcDir, path.basename(resolved));
+            if (!fs.existsSync(targetFile)) {
+              fs.writeFileSync(targetFile, snippet, "utf-8");
+              console.log(`📁 Menyalin file kode ke: ${targetFile}`);
+            }
+
+            return { snippet, file: resolved };
+          }
+        } catch (e: any) {
+          console.log(`⚠️ Gagal membaca file: ${e.message}`);
+        }
+      } else {
+        console.log(`⚠️ File "${val}" tidak ditemukan di komputer! Periksa kembali path atau tekan Enter.`);
+      }
+    }
+  }
+
+  async function promptDescription(currentCat: ProjectCategory): Promise<string> {
+    const hintText =
+      currentCat === "iot"
+        ? "Deskripsi singkat / Hardware & Sensor (misal: ESP32, DHT22, Servo, MQTT)"
+        : currentCat === "game"
+        ? "Deskripsi singkat gameplay / Engine (misal: Godot 4 2D platformer)"
+        : "Deskripsi singkat web app & fitur utama";
+    return await ask(rl, `📝 ${hintText}`, descriptionHint);
+  }
+
+  async function promptStacks(currentCat: ProjectCategory): Promise<string[]> {
+    const defaultStacks =
+      currentCat === "iot"
+        ? "Arduino, C++, ESP32"
+        : currentCat === "game"
+        ? "Godot, C#, Blender"
+        : "Next.js, TypeScript, TailwindCSS, Supabase";
+    const currentStr = stacks.length ? stacks.join(", ") : defaultStacks;
+    const input = await ask(rl, "🛠 Tech Stack (pisahkan dengan koma)", currentStr);
+    return input.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
+  // Initial Wizard Collection
+  if (!name) name = await promptName();
+  if (!slug) slug = await promptSlug(name);
+  if (!category || !["iot", "game", "web"].includes(category)) category = await promptCategory();
+  if (!projectPath) projectPath = await promptProjectPath();
+
+  if (category === "iot" && !sourceCodeSnippet) {
     if (flags.code) {
       const codeArg = String(flags.code);
       if (fs.existsSync(codeArg)) {
-        try {
-          sourceCodeSnippet = fs.readFileSync(codeArg, "utf-8").slice(0, 15000);
-          console.log(`🔌 Membaca kode firmware dari file: ${codeArg}`);
-        } catch {}
+        sourceCodeSnippet = fs.readFileSync(codeArg, "utf-8").slice(0, 15000);
+        sourceCodeFile = codeArg;
       } else {
         sourceCodeSnippet = codeArg.slice(0, 15000);
       }
     } else {
-      const scanned = scanIotSourceFiles(projectPath);
-      if (scanned.files.length > 0) {
-        sourceCodeSnippet = scanned.snippet;
-        console.log(`\n🔌 Terdeteksi ${scanned.files.length} file firmware di folder: ${scanned.files.join(", ")}`);
-        console.log(`   -> AI akan otomatis mengekstrak pinout dan merender diagram wiring Mermaid!`);
-      } else if (!flags.name) {
-        console.log(`\n🔌 Deteksi Wiring & Pinout Otomatis:`);
-        const codeInput = await ask(
-          rl,
-          "Masukkan path file kode sumber (misal C:\\kode\\main.cpp) atau kosongkan jika tidak ada",
-          ""
-        );
-        if (codeInput && fs.existsSync(codeInput)) {
-          try {
-            sourceCodeSnippet = fs.readFileSync(codeInput, "utf-8").slice(0, 15000);
-            console.log(`✅ Berhasil membaca kode sumber dari: ${codeInput}`);
-            // Salin file kode sumber ke folder proyek jika belum ada
-            const targetSrcDir = path.join(projectPath, "src");
-            if (!fs.existsSync(targetSrcDir)) fs.mkdirSync(targetSrcDir, { recursive: true });
-            const targetFile = path.join(targetSrcDir, path.basename(codeInput));
-            if (!fs.existsSync(targetFile)) {
-              fs.writeFileSync(targetFile, sourceCodeSnippet, "utf-8");
-              console.log(`📁 Menyalin file kode sumber ke: ${targetFile}`);
+      const res = await promptIotCode(projectPath);
+      sourceCodeSnippet = res.snippet;
+      sourceCodeFile = res.file;
+    }
+  }
+
+  if (!descriptionHint && !flags.name) descriptionHint = await promptDescription(category);
+  if (!stacks.length) {
+    if (flags.stacks) {
+      stacks = String(flags.stacks).split(",").map((s) => s.trim()).filter(Boolean);
+    } else {
+      stacks = await promptStacks(category);
+    }
+  }
+
+  if (!linkDemo && category === "web") {
+    linkDemo = `https://${slug}.vercel.app`;
+  }
+
+  // ==========================================================
+  // REVIEW & EDIT LOOP (Jika user salah input, BISA DIUBAH!)
+  // ==========================================================
+  if (!flags.name) {
+    while (true) {
+      const linkGithub = `https://github.com/${GITHUB_USERNAME}/${slug}`;
+      console.log(`\n╔═══════════════════════════════════════════════════════════╗`);
+      console.log(`║                   📋 RINGKASAN PROYEK                     ║`);
+      console.log(`╚═══════════════════════════════════════════════════════════╝`);
+      console.log(`  1. Judul Proyek     : ${name}`);
+      console.log(`  2. Slug URL         : ${slug}`);
+      console.log(`  3. Kategori         : ${category.toUpperCase()}`);
+      console.log(`  4. Folder Proyek    : ${projectPath}`);
+      if (category === "iot") {
+        console.log(`  5. Kode & Wiring    : ${sourceCodeSnippet ? `Tersedia (${sourceCodeFile || "Code snippet"}) -> Auto-generate Mermaid Diagram` : "Belum ada (Gunakan template standar)"}`);
+      }
+      console.log(`  6. Tech Stack       : ${stacks.join(", ")}`);
+      console.log(`  7. Catatan / Hint   : ${descriptionHint || "-"}`);
+      console.log(`  8. Live Demo URL    : ${linkDemo || "-"}`);
+      console.log(`  • GitHub Repo URL   : ${linkGithub}\n`);
+
+      const choice = await ask(rl, "Pilihan: [Y] Lanjutkan | [E] Edit data | [Q] Batalkan (Y/e/q)", "Y");
+      const c = choice.trim().toLowerCase();
+
+      if (c === "y" || c === "yes" || c === "") {
+        break; // Lanjut eksekusi
+      }
+
+      if (c === "q" || c === "quit") {
+        const confirmCancel = await ask(rl, "Yakin ingin membatalkan otomasi? (y/N)", "N");
+        if (confirmCancel.toLowerCase() === "y") {
+          console.log("❌ Dibatalkan oleh pengguna.");
+          rl.close();
+          return;
+        }
+        continue;
+      }
+
+      if (c === "e" || c === "edit" || !isNaN(Number(c))) {
+        let fieldNum = c;
+        if (c === "e" || c === "edit") {
+          fieldNum = await ask(rl, "Nomor berapa yang ingin diubah? (1-8)", "1");
+        }
+
+        switch (fieldNum.trim()) {
+          case "1":
+            name = await promptName();
+            const changeSlug = await ask(rl, `Update slug otomatis menjadi "${sanitizeSlug(name)}"? (Y/n)`, "Y");
+            if (changeSlug.toLowerCase() !== "n") {
+              slug = sanitizeSlug(name);
             }
-          } catch (e: any) {
-            console.warn("⚠️ Gagal membaca file kode:", e.message);
-          }
+            break;
+          case "2":
+            slug = await promptSlug(name);
+            break;
+          case "3":
+            category = await promptCategory();
+            if (category === "iot" && !sourceCodeSnippet) {
+              const res = await promptIotCode(projectPath);
+              sourceCodeSnippet = res.snippet;
+              sourceCodeFile = res.file;
+            }
+            break;
+          case "4":
+            projectPath = await promptProjectPath();
+            if (category === "iot") {
+              const res = await promptIotCode(projectPath);
+              if (res.snippet) {
+                sourceCodeSnippet = res.snippet;
+                sourceCodeFile = res.file;
+              }
+            }
+            break;
+          case "5":
+            if (category === "iot") {
+              const res = await promptIotCode(projectPath);
+              sourceCodeSnippet = res.snippet;
+              sourceCodeFile = res.file;
+            } else {
+              console.log("Pilihan ini hanya untuk kategori IoT.");
+            }
+            break;
+          case "6":
+            stacks = await promptStacks(category);
+            break;
+          case "7":
+            descriptionHint = await promptDescription(category);
+            break;
+          case "8":
+            linkDemo = await ask(rl, "Masukkan Live Demo URL", linkDemo);
+            break;
+          default:
+            console.log(`⚠️ Nomor pilihan tidak dikenal.`);
         }
       }
     }
   }
 
-  // Step 6: Description & Hardware/Engine details
-  let descriptionHint = (flags.desc as string) || "";
-  if (!descriptionHint && !flags.name) {
-    const hintPrompt =
-      category === "iot"
-        ? "Deskripsi singkat / Sensor & Komponen hardware (misal: ESP32, DHT22, Pompa Air, MQTT)"
-        : category === "game"
-        ? "Deskripsi singkat gameplay / Engine (misal: Godot 4 2D platformer, pixel art)"
-        : "Deskripsi singkat web app & fitur utama";
-    descriptionHint = await ask(rl, `📝 ${hintPrompt}`, "");
-  }
-
-  // Step 7: Tech stacks
-  let stacks: string[] = [];
-  if (flags.stacks) {
-    stacks = (flags.stacks as string).split(",").map((s) => s.trim()).filter(Boolean);
-  } else {
-    const defaultStacks =
-      category === "iot"
-        ? "ESP32, C++, PlatformIO, MQTT"
-        : category === "game"
-        ? "Godot, C#, Blender"
-        : "Next.js, TypeScript, TailwindCSS, Supabase";
-    const stacksInput = await ask(rl, "🛠 Tech Stack (pisahkan dengan koma)", defaultStacks);
-    stacks = stacksInput.split(",").map((s) => s.trim()).filter(Boolean);
-  }
-
-  // Step 8: Demo URL (optional)
-  let linkDemo = (flags.demo as string) || "";
-  if (!linkDemo && category === "web") {
-    linkDemo = `https://${slug}.vercel.app`;
-  }
+  rl.close();
 
   const linkGithub = `https://github.com/${GITHUB_USERNAME}/${slug}`;
 
-  // Step 9: Confirmation
-  console.log(`\n📋 RINGKASAN PROYEK:`);
-  console.log(`  • Judul       : ${name}`);
-  console.log(`  • Slug        : ${slug}`);
-  console.log(`  • Kategori    : ${category.toUpperCase()}`);
-  console.log(`  • Folder      : ${projectPath}`);
-  console.log(`  • Tech Stack  : ${stacks.join(", ")}`);
-  console.log(`  • GitHub Repo : ${linkGithub}`);
-  console.log(`  • Live Demo   : ${linkDemo || "-"}`);
-  if (category === "iot") {
-    console.log(`  • Diagram     : ${sourceCodeSnippet ? "Otomatis (Mermaid wiring dideteksi dari kode)" : "Template Standar"}`);
-  }
-  console.log("");
-
-  if (!flags.name) {
-    const proceed = await ask(rl, "Lanjutkan proses otomasi? (Y/n)", "Y");
-    if (proceed.toLowerCase() === "n") {
-      console.log("❌ Dibatalkan oleh pengguna.");
-      rl.close();
-      return;
-    }
-  }
-  rl.close();
-
   console.log(`\n⏳ Memulai proses otomasi...\n`);
 
-  // 1. Generate README with Gemini
+  // ==========================================================
+  // STEP 1: GENERATE README VIA GEMINI (Dengan Retry Loop)
+  // ==========================================================
   console.log(`🤖 1/6 Membangun README profesional & diagram wiring via Gemini AI...`);
-  const { description, readme } = await generateReadme({
-    repo: slug,
-    slug,
-    category,
-    name,
-    topics: ["portfolio", category, ...stacks],
-    descriptionHint,
-    stacks,
-    linkGithub,
-    linkDemo,
-    sourceCodeSnippet,
-  });
+  let generatedData: { description: string; readme: string } | null = null;
 
-  // 2. Write README.md and .gitignore locally
+  while (!generatedData) {
+    try {
+      generatedData = await generateReadme({
+        repo: slug,
+        slug,
+        category,
+        name,
+        topics: ["portfolio", category, ...stacks],
+        descriptionHint,
+        stacks,
+        linkGithub,
+        linkDemo,
+        sourceCodeSnippet,
+      });
+    } catch (err: any) {
+      console.warn(`\n⚠️ Terjadi kendala saat generate via AI: ${err.message}`);
+      const fallbackPrompt = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const retryChoice = await ask(fallbackPrompt, "[R] Coba lagi | [F] Gunakan template standar | [Q] Batalkan (R/f/q)", "R");
+      fallbackPrompt.close();
+
+      if (retryChoice.toLowerCase() === "f") {
+        console.log("Menggunakan template README standar...");
+        break;
+      } else if (retryChoice.toLowerCase() === "q") {
+        console.log("Dibatalkan.");
+        return;
+      }
+    }
+  }
+
+  const description = generatedData?.description || `${name} — Proyek ${category.toUpperCase()} inovatif.`;
+  const readme = generatedData?.readme || `# ${name}\n\n> ${description}\n`;
+
+  // ==========================================================
+  // STEP 2: WRITE README.md & .gitignore LOCALLY
+  // ==========================================================
   console.log(`📄 2/6 Menyimpan README.md dan file konfigurasi proyek...`);
   fs.writeFileSync(path.join(projectPath, "README.md"), readme, "utf-8");
 
@@ -544,7 +709,9 @@ PILIHAN ARGUMEN:
     fs.writeFileSync(gitignorePath, getGitignoreTemplate(category), "utf-8");
   }
 
-  // 3. Local Git initialization & commit
+  // ==========================================================
+  // STEP 3: LOCAL GIT INITIALIZATION & COMMIT
+  // ==========================================================
   console.log(`📦 3/6 Menginisialisasi Git lokal...`);
   try {
     const isGit = fs.existsSync(path.join(projectPath, ".git"));
@@ -557,20 +724,21 @@ PILIHAN ARGUMEN:
         cwd: projectPath,
         stdio: "ignore",
       });
-    } catch {
-      // nothing to commit or already committed
-    }
+    } catch {}
   } catch (err: any) {
-    console.warn("⚠️ Catatan Git:", err.message);
+    console.warn("⚠️ Catatan Git lokal:", err.message);
   }
 
-  // 4. Create and push to GitHub
+  // ==========================================================
+  // STEP 4: CREATE AND PUSH TO GITHUB (Dengan Retry/Skip Loop)
+  // ==========================================================
   if (!flags.dryRun && !flags.skipGithub) {
     console.log(`🌐 4/6 Menghubungkan dan push ke GitHub...`);
     const topics = ["portfolio", category, ...stacks.slice(0, 5)];
-    const ghRepo = await createGithubRepo(slug, description, false, topics);
+    await createGithubRepo(slug, description, false, topics);
 
-    if (ghRepo || GITHUB_TOKEN) {
+    let pushSuccess = false;
+    while (!pushSuccess) {
       try {
         const remoteUrl = GITHUB_TOKEN
           ? `https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_USERNAME}/${slug}.git`
@@ -584,15 +752,29 @@ PILIHAN ARGUMEN:
         execSync(`git branch -M main`, { cwd: projectPath, stdio: "ignore" });
         execSync(`git push -u origin main --force`, { cwd: projectPath, stdio: "inherit" });
         console.log(`✅ Berhasil push ke GitHub: ${linkGithub}`);
+        pushSuccess = true;
       } catch (err: any) {
-        console.warn("⚠️ Git push notice:", err.message);
+        console.warn(`\n⚠️ Git push belum berhasil: ${err.message}`);
+        const retryPrompt = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const pChoice = await ask(retryPrompt, "[R] Coba push lagi | [S] Lewati tahap GitHub | [Q] Batalkan (R/s/q)", "S");
+        retryPrompt.close();
+
+        if (pChoice.toLowerCase() === "s") {
+          console.log("Melanjutkan proses tanpa push GitHub...");
+          break;
+        } else if (pChoice.toLowerCase() === "q") {
+          console.log("Dibatalkan.");
+          return;
+        }
       }
     }
   } else {
     console.log(`⏭️ 4/6 Melewati GitHub (dry-run / skip-github flag).`);
   }
 
-  // 5. Deploy / Vercel Configuration
+  // ==========================================================
+  // STEP 5: DEPLOY / VERCEL CONFIGURATION
+  // ==========================================================
   if (!flags.dryRun && !flags.skipVercel && category === "web") {
     console.log(`▲ 5/6 Konfigurasi Deployment Vercel...`);
     const liveUrl = await triggerVercelDeploy(slug, `${GITHUB_USERNAME}/${slug}`);
@@ -601,7 +783,9 @@ PILIHAN ARGUMEN:
     console.log(`⏭️ 5/6 Melewati Vercel.`);
   }
 
-  // 6. Supabase Database Sync & Portfolio MDX
+  // ==========================================================
+  // STEP 6: SUPABASE & PORTFOLIO MDX CONTENT
+  // ==========================================================
   if (!flags.dryRun && !flags.skipSupabase) {
     console.log(`🗄️ 6/6 Sinkronisasi ke Supabase & Portfolio website...`);
     await upsertSupabaseProject({
@@ -615,7 +799,7 @@ PILIHAN ARGUMEN:
     });
   }
 
-  // Write MDX to portfolio contents/projects/
+  // Tulis MDX ke contents/projects/
   const portfolioRootDir = path.resolve(__dirname, "..");
   const mdxDir = path.join(portfolioRootDir, "contents", "projects");
   if (fs.existsSync(mdxDir)) {
@@ -623,7 +807,6 @@ PILIHAN ARGUMEN:
     fs.writeFileSync(mdxFile, readme, "utf-8");
     console.log(`📝 Berhasil membuat file MDX portfolio: contents/projects/${slug}.mdx`);
 
-    // Auto-commit MDX to portfolio repo if we are in git
     try {
       execSync(`git add contents/projects/${slug}.mdx`, { cwd: portfolioRootDir, stdio: "ignore" });
       execSync(`git commit -m "feat(projects): add ${name} [${category}]"`, {
@@ -639,7 +822,7 @@ PILIHAN ARGUMEN:
 ║                      🎉 OTOMASI PROYEK SELESAI! 🎉                       ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 
-✅ README Profesional : Dibuat dengan panduan instalasi lengkap
+✅ README Profesional : Dibuat dengan diagram wiring Mermaid & pinout lengkap
 ✅ GitHub Repo        : ${linkGithub} (Topic: portfolio, ${category})
 ✅ Portfolio Web      : Tampil otomatis di /projects [Kategori: ${category.toUpperCase()}]
 ✅ Database Supabase  : Proyek tersimpan dan aktif (is_show = true)
@@ -648,11 +831,10 @@ ${category === "web" ? `✅ Vercel Deploy     : ${linkDemo}` : ""}
 Langkah Selanjutnya:
 1. Mulai kembangkan kode di folder: ${projectPath}
 2. Setiap kali git push, repositori Anda sudah memiliki dokumentasi standar industri!
-3. Jika ingin update live demo di kemudian hari, cukup jalankan kembali otomasi ini.
 `);
 }
 
 main().catch((err) => {
-  console.error("❌ Terjadi kesalahan fatal:", err);
+  console.error("\n❌ Terjadi kesalahan:", err.message || err);
   process.exit(1);
 });
