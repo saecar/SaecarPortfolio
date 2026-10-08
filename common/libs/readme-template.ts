@@ -216,7 +216,131 @@ Didistribusikan di bawah lisensi **MIT**. Seluruh aset audio/visual terikat lise
     return { description, readme };
   }
 
-  // Web default
+  if (category === "web-frontend") {
+    const description =
+      descriptionHint ||
+      `Antarmuka web modern (Frontend UI) yang responsif, berkecepatan tinggi, dan dioptimasi untuk UX terbaik.`;
+    const readme = `# ${name}
+
+> ${description}
+
+[![Category](https://img.shields.io/badge/Category-Frontend_Web-blue.svg)](#)
+[![Deploy with Vercel](https://img.shields.io/badge/Deploy-Vercel-black.svg?logo=vercel)](${linkDemo || "#"})
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+${linkDemo ? `[![Live Demo](https://img.shields.io/badge/Demo-Live_Preview-success.svg)](${linkDemo})` : ""}
+
+**${name}** adalah aplikasi web frontend modular yang dibangun untuk menyajikan antarmuka pengguna interaktif, responsif, dan optimal di berbagai ukuran layar.
+
+---
+
+## ⚡ Fitur Utama
+- **UI/UX Interaktif & Responsif**: Tampilan mulus di perangkat mobile, tablet, dan desktop.
+- **Fast Build & Instant HMR**: Toolchain modern untuk pengalaman pengembang yang cepat.
+- **Komponen Modular**: Struktur komponen yang terisolasi dan mudah di-maintain.
+- **Optimasi Aset & SEO**: Skor Core Web Vitals tinggi dan waktu muat instan.
+
+## 🛠 Tech Stack
+- **Framework & Libraries**: ${stackBadges}
+- **Deployment Platform**: Vercel
+
+---
+
+## 🚀 Cara Pemasangan & Menjalankan Proyek
+
+\`\`\`bash
+# 1. Kloning repositori
+git clone ${linkGithub}.git
+cd ${slug}
+
+# 2. Instal dependensi
+bun install # atau npm install
+
+# 3. Jalankan development server
+bun dev # atau npm run dev
+\`\`\`
+
+Buka [http://localhost:3000](http://localhost:3000) di browser Anda untuk melihat hasilnya.
+
+## 🌐 Deployment (Auto Deploy ke Vercel Saja)
+Aplikasi frontend ini di-deploy secara otomatis ke Vercel melalui integrasi GitHub. Setiap \`git push\` akan memicu preview/production build secara otomatis.
+
+## 📂 Struktur Folder
+\`\`\`
+├── src/ / components/  # Komponen UI dan layout modular
+├── public/             # Asset statis (gambar, font, ikon)
+└── README.md
+\`\`\`
+
+## 📄 Lisensi
+Didistribusikan di bawah lisensi **MIT**.
+`;
+    return { description, readme };
+  }
+
+  if (category === "web-backend") {
+    const description =
+      descriptionHint ||
+      `Layanan RESTful API & Backend berkecepatan tinggi dengan arsitektur scalable, routing modular, dan database terintegrasi.`;
+    const readme = `# ${name}
+
+> ${description}
+
+[![Category](https://img.shields.io/badge/Category-Backend_API-indigo.svg)](#)
+[![Deploy on Railway](https://img.shields.io/badge/Deploy-Railway-black.svg?logo=railway)](${linkDemo || "#"})
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+${linkDemo ? `[![API Endpoint](https://img.shields.io/badge/API-Live_Endpoint-success.svg)](${linkDemo})` : ""}
+
+**${name}** menyediakan layanan RESTful API dengan struktur routing modular, middleware autentikasi, serta integrasi database yang andal.
+
+---
+
+## ⚡ Fitur Utama
+- **RESTful Architecture**: Routing terstruktur dengan representasi JSON standar.
+- **Autentikasi & Otorisasi**: Proteksi endpoint dengan token JWT / API key.
+- **Validasi Data & Sanitasi**: Validasi payload request yang ketat.
+- **Database ORM / Migrasi**: Pengelolaan skema database yang aman dan teruji.
+
+## 🛠 Tech Stack & Environment
+- **Runtime / Framework**: ${stackBadges}
+- **Database & Cloud**: Supabase / PostgreSQL / Railway
+
+---
+
+## 🚀 Cara Pemasangan & Menjalankan Proyek
+
+\`\`\`bash
+# 1. Kloning repositori
+git clone ${linkGithub}.git
+cd ${slug}
+
+# 2. Instal dependensi
+bun install # atau npm install / composer install
+
+# 3. Konfigurasi Environment Variables
+cp .env.example .env
+
+# 4. Jalankan server lokal
+bun run start # atau php artisan serve / uvicorn main:app
+\`\`\`
+
+## 🌐 Deployment (Railway / Supabase)
+Layanan backend ini siap di-deploy secara otomatis sebagai container di Railway atau REST API di Supabase.
+
+## 📂 Struktur Folder
+\`\`\`
+├── src/ / app/         # Controllers, Routes, Services & Models
+├── config/             # Konfigurasi database & environment
+├── API.md              # Dokumentasi lengkap spesifikasi API
+└── README.md
+\`\`\`
+
+## 📄 Lisensi
+Didistribusikan di bawah lisensi **MIT**.
+`;
+    return { description, readme };
+  }
+
+  // Web Fullstack default
   const description =
     descriptionHint ||
     `Aplikasi web modern dengan performa tinggi, UI/UX interaktif, dan arsitektur scalable.`;
@@ -385,13 +509,35 @@ Spesifik Kategori Game:
 - Jelaskan versi Engine yang dibutuhkan (Unity / Godot / Unreal / Phaser / Three.js).
 - Jelaskan langkah setup editor, import project, serta cara export / build ke Windows Executable dan WebGL.
 - Tuliskan struktur scene dan hierarki aset.`;
+  } else if (category === "web-frontend") {
+    categoryGuide = `
+Spesifik Kategori Web Frontend:
+- Jelaskan arsitektur antarmuka pengguna (UI/UX), komponen modular, state management, dan styling (Tailwind CSS/CSS modules).
+- Tekankan aspek performa frontend: Core Web Vitals, responsive design di mobile/tablet/desktop, dan aksesibilitas.
+- Berikan langkah instalasi & build frontend (bun install, bun dev, bun run build).
+- Sertakan instruksi deploy online ke Vercel (Auto Deploy via GitHub/Vercel).`;
+  } else if (category === "web-backend") {
+    categoryGuide = `
+Spesifik Kategori Web Backend / REST API:
+- Jelaskan arsitektur server backend (Express/Nest/Laravel/FastAPI/Go), routing modular, middleware, dan koneksi database.
+- Tuliskan TABEL ENDPOINTS RESTFUL API LENGKAP (Method, Endpoint Path, Deskripsi, Request Payload, Status Code).
+- Berikan contoh request cURL dan contoh response JSON.
+- Jelaskan mekanisme keamanan (JWT authentication, rate limiting, CORS, input sanitization).
+- Sertakan instruksi deployment online container ke Railway (atau Supabase PostgREST / Edge Functions).`;
+  } else if (category === "web-fullstack") {
+    categoryGuide = `
+Spesifik Kategori Web Fullstack:
+- Jelaskan arsitektur 3-tier terpadu: Frontend (Next.js/React di Vercel), Backend Logic / API, dan Database (Supabase PostgreSQL / Railway).
+- Jelaskan skema database, relasi entitas, dan flow autentikasi data.
+- Buat petunjuk konfigurasi environment variables (.env.example untuk Vercel & Supabase).
+- Sertakan panduan deployment online: Frontend otomatis di Vercel terhubung ke Database Supabase & Backend di Railway.`;
   } else {
     categoryGuide = `
 Spesifik Kategori Web:
 - Jelaskan arsitektur web (Frontend, Backend, Database, Auth).
 - Buat petunjuk environment variables (.env.example).
 - Berikan langkah instalasi lengkap (git clone, bun/npm install, konfigurasi .env, bun dev, bun run build).
-- Sertakan instruksi deploy otomatis ke Vercel dan integrasi Supabase.`;
+- Sertakan instruksi deploy otomatis ke Vercel dan integrasi Supabase / Railway.`;
   }
 
   const prompt = `Anda adalah Software Engineer & Technical Writer handal. Buatlah README.md yang SANGAT PROFESIONAL, LENGKAP, dan BERSIH untuk proyek open-source:

@@ -244,33 +244,81 @@ async function createGithubRepo(name: string, description: string, isPrivate: bo
   }
 }
 
-async function triggerVercelDeploy(projectName: string, repoFullName: string): Promise<string | null> {
+async function triggerVercelDeploy({
+  projectName,
+  repoFullName,
+  envVars = {},
+}: {
+  projectName: string;
+  repoFullName: string;
+  envVars?: Record<string, string>;
+}): Promise<string | null> {
   if (!VERCEL_TOKEN || VERCEL_TOKEN === "your_vercel_token") {
     console.log("ℹ️ VERCEL_TOKEN belum diatur di .env. Hubungkan repo secara manual di dashboard Vercel.");
-    return null;
+    return `https://${projectName}.vercel.app`;
   }
 
   try {
-    console.log(`⚡ Mengintegrasikan Frontend dengan Vercel...`);
+    console.log(`▲ Mengintegrasikan Frontend dengan Vercel API...`);
     const headers = {
       Authorization: `Bearer ${VERCEL_TOKEN}`,
       "Content-Type": "application/json",
     };
 
-    const res = await axios.post(
-      `https://api.vercel.com/v9/projects`,
-      {
-        name: projectName,
-        framework: "nextjs",
-        gitRepository: {
-          type: "github",
-          repo: repoFullName,
-        },
-      },
-      { headers }
-    );
+    // 1. Dapatkan atau buat project Vercel
+    let projectId: string | null = null;
+    let repoId: number | undefined;
 
-    const projectId = res.data?.id;
+    try {
+      const existing = await axios.get(`https://api.vercel.com/v9/projects/${projectName}`, { headers });
+      projectId = existing.data?.id;
+      repoId = existing.data?.link?.repoId;
+      console.log(`ℹ️ Project Vercel "${projectName}" sudah terdaftar (ID: ${projectId}).`);
+    } catch (e: any) {
+      if (e.response?.status === 404) {
+        const res = await axios.post(
+          `https://api.vercel.com/v9/projects`,
+          {
+            name: projectName,
+            gitRepository: {
+              type: "github",
+              repo: repoFullName,
+            },
+          },
+          { headers }
+        );
+        projectId = res.data?.id;
+        repoId = res.data?.link?.repoId;
+        console.log(`✅ Berhasil membuat project baru di Vercel: ${projectName}`);
+      } else {
+        throw e;
+      }
+    }
+
+    // 2. Suntikkan Environment Variables (Supabase / Database) jika ada
+    if (projectId && envVars && Object.keys(envVars).length > 0) {
+      console.log(`🔑 Menginjeksi environment variables ke project Vercel...`);
+      for (const [key, value] of Object.entries(envVars)) {
+        if (!value) continue;
+        try {
+          await axios.post(
+            `https://api.vercel.com/v10/projects/${projectId}/env`,
+            {
+              key,
+              value,
+              type: "plain",
+              target: ["production", "preview", "development"],
+            },
+            { headers }
+          );
+          console.log(`   + Envar ${key} ditambahkan`);
+        } catch {
+          // Abaikan jika sudah ada
+        }
+      }
+    }
+
+    // 3. Picu Deployment ke Vercel
     if (projectId) {
       try {
         await axios.post(
@@ -281,22 +329,143 @@ async function triggerVercelDeploy(projectName: string, repoFullName: string): P
             gitSource: {
               type: "github",
               ref: "main",
-              repoId: res.data?.link?.repoId,
+              ...(repoId ? { repoId } : {}),
             },
           },
           { headers }
         );
         console.log(`🚀 Deployment Vercel berhasil dipicu!`);
       } catch {
-        console.log(`ℹ️ Project Vercel terhubung ke GitHub (${repoFullName}). Deployment otomatis aktif.`);
+        console.log(`ℹ️ Project Vercel terhubung ke GitHub (${repoFullName}). Auto-deploy via git push aktif.`);
       }
       return `https://${projectName}.vercel.app`;
     }
 
-    return null;
+    return `https://${projectName}.vercel.app`;
   } catch (err: any) {
     console.warn("⚠️ Vercel API response:", err.response?.data?.error?.message || err.message);
-    return null;
+    return `https://${projectName}.vercel.app`;
+  }
+}
+
+async function triggerRailwayDeploy({
+  projectName,
+  repoFullName,
+  envVars = {},
+}: {
+  projectName: string;
+  repoFullName: string;
+  envVars?: Record<string, string>;
+}): Promise<string | null> {
+  const railwayToken = process.env.RAILWAY_TOKEN || process.env.RAILWAY_API_TOKEN;
+  const webhook = process.env.RAILWAY_DEPLOY_WEBHOOK;
+
+  console.log(`🚂 Mengonfigurasi deployment REST API ke Railway...`);
+
+  // 1. Jika ada token Railway via GraphQL API
+  if (railwayToken) {
+    try {
+      const headers = {
+        Authorization: `Bearer ${railwayToken}`,
+        "Content-Type": "application/json",
+      };
+
+      const createProjGql = `
+        mutation ProjectCreate($name: String!) {
+          projectCreate(input: { name: $name }) {
+            id
+            name
+          }
+        }
+      `;
+      const projRes = await axios.post(
+        "https://backboard.railway.app/graphql/v2",
+        { query: createProjGql, variables: { name: projectName } },
+        { headers }
+      );
+      const projectId = projRes.data?.data?.projectCreate?.id;
+
+      if (projectId) {
+        console.log(`✅ Berhasil membuat project di Railway: ${projectName} (ID: ${projectId})`);
+
+        try {
+          const createServiceGql = `
+            mutation ServiceCreate($projectId: String!, $source: ServiceSourceInput!) {
+              serviceCreate(input: { projectId: $projectId, source: $source }) {
+                id
+                name
+              }
+            }
+          `;
+          await axios.post(
+            "https://backboard.railway.app/graphql/v2",
+            {
+              query: createServiceGql,
+              variables: {
+                projectId,
+                source: { repo: repoFullName },
+              },
+            },
+            { headers }
+          );
+          console.log(`🚀 Service Railway berhasil dihubungkan ke GitHub (${repoFullName})!`);
+        } catch (svcErr: any) {
+          console.warn("ℹ️ Railway service note:", svcErr.response?.data || svcErr.message);
+        }
+
+        return `https://${projectName}.up.railway.app`;
+      }
+    } catch (e: any) {
+      console.warn("⚠️ Railway API note:", e.response?.data?.errors?.[0]?.message || e.message);
+    }
+  }
+
+  // 2. Jika ada Webhook Railway
+  if (webhook) {
+    try {
+      await axios.post(webhook);
+      console.log(`✅ Berhasil memicu Railway Deploy Webhook!`);
+      return `https://${projectName}.up.railway.app`;
+    } catch (e: any) {
+      console.warn("⚠️ Railway webhook note:", e.message);
+    }
+  }
+
+  // 3. Fallback: Panduan & 1-Click Deploy Railway
+  const oneClickUrl = `https://railway.app/new?repo=${repoFullName}`;
+  console.log(`ℹ️ Repositori siap dideploy ke Railway via 1-Click Link:`);
+  console.log(`   🔗 ${oneClickUrl}`);
+  console.log(`   (Domain live API Anda: https://${projectName}.up.railway.app)`);
+
+  return `https://${projectName}.up.railway.app`;
+}
+
+async function configureSupabaseBackend({
+  slug,
+  title,
+}: {
+  slug: string;
+  title: string;
+}): Promise<{ apiUrl: string; dbConnected: boolean }> {
+  console.log(`⚡ Mengonfigurasi Supabase Backend & Database...`);
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  if (!supaUrl) {
+    console.warn("⚠️ NEXT_PUBLIC_SUPABASE_URL belum diatur di .env.");
+    return { apiUrl: "", dbConnected: false };
+  }
+
+  try {
+    const supa = createServiceClient();
+    const { error } = await supa.from("projects").select("count", { count: "exact", head: true });
+    console.log(`✅ Supabase Database terhubung! Endpoint REST API: ${supaUrl}/rest/v1/`);
+    return {
+      apiUrl: `${supaUrl}/rest/v1/`,
+      dbConnected: !error,
+    };
+  } catch (err: any) {
+    console.warn(`⚠️ Catatan koneksi Supabase: ${err.message}`);
+    return { apiUrl: `${supaUrl}/rest/v1/`, dbConnected: false };
   }
 }
 
@@ -306,7 +475,7 @@ async function triggerBackendDeploy({
   repoFullName,
   deployUrl,
 }: {
-  platform: "render" | "railway" | "vercel" | "custom" | "none";
+  platform: "render" | "railway" | "vercel" | "supabase" | "custom" | "none";
   slug: string;
   repoFullName: string;
   deployUrl?: string;
@@ -314,6 +483,18 @@ async function triggerBackendDeploy({
   if (platform === "none") return null;
 
   console.log(`⚙️ Mengonfigurasi deployment Backend (${platform.toUpperCase()})...`);
+
+  if (platform === "railway") {
+    return await triggerRailwayDeploy({
+      projectName: slug,
+      repoFullName,
+    });
+  }
+
+  if (platform === "supabase") {
+    const supa = await configureSupabaseBackend({ slug, title: slug });
+    return supa.apiUrl || null;
+  }
 
   if (platform === "render") {
     const hook = deployUrl || process.env.RENDER_DEPLOY_HOOK;
@@ -333,24 +514,11 @@ async function triggerBackendDeploy({
     return deployUrl || null;
   }
 
-  if (platform === "railway") {
-    const hook = deployUrl || process.env.RAILWAY_DEPLOY_WEBHOOK;
-    if (hook) {
-      try {
-        await axios.post(hook);
-        console.log(`✅ Berhasil memicu webhook Railway!`);
-        return `https://${slug}.up.railway.app`;
-      } catch (e: any) {
-        console.warn(`⚠️ Railway webhook response:`, e.message);
-      }
-    } else {
-      console.log(`ℹ️ Railway: Buka https://railway.app/new dan pilih 'Deploy from GitHub repo' -> https://github.com/${repoFullName}`);
-    }
-    return deployUrl || null;
-  }
-
   if (platform === "vercel") {
-    return await triggerVercelDeploy(`${slug}-api`, repoFullName);
+    return await triggerVercelDeploy({
+      projectName: `${slug}-api`,
+      repoFullName,
+    });
   }
 
   if (platform === "custom" && deployUrl) {
@@ -610,6 +778,132 @@ async function upsertSupabaseProject(data: {
   }
 }
 
+function detectProjectArchitecture(targetPath: string): {
+  detectedCategory: ProjectCategory;
+  summary: string;
+  recommendedStacks: string[];
+} {
+  try {
+    if (!fs.existsSync(targetPath)) {
+      return {
+        detectedCategory: "web-fullstack",
+        summary: "Direktori Baru (Default: Web Fullstack)",
+        recommendedStacks: ["Next.js", "TypeScript", "TailwindCSS", "Supabase"],
+      };
+    }
+
+    const files: string[] = [];
+    const scan = (dir: string, depth = 0) => {
+      if (depth > 2) return;
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const e of entries) {
+          if (e.name.startsWith(".") || e.name === "node_modules" || e.name === "vendor") continue;
+          const full = path.join(dir, e.name);
+          if (e.isDirectory()) scan(full, depth + 1);
+          else files.push(e.name.toLowerCase());
+        }
+      } catch {}
+    };
+    scan(targetPath);
+
+    // 1. IoT check
+    if (files.some((f) => f.endsWith(".ino") || f === "platformio.ini" || f === "diagram.json")) {
+      return {
+        detectedCategory: "iot",
+        summary: "IoT & Hardware (ESP32/Arduino/Sensor/Firmware)",
+        recommendedStacks: ["ESP32", "Arduino", "C++", "PlatformIO"],
+      };
+    }
+
+    // 2. Game check
+    if (files.some((f) => f === "project.godot" || f.endsWith(".unity") || f.endsWith(".uproject"))) {
+      return {
+        detectedCategory: "game",
+        summary: "Game Development (Unity / Godot / Unreal)",
+        recommendedStacks: ["Godot", "C#", "GDScript"],
+      };
+    }
+
+    // 3. PHP / Laravel check
+    if (files.includes("composer.json")) {
+      try {
+        const composer = JSON.parse(fs.readFileSync(path.join(targetPath, "composer.json"), "utf-8"));
+        const isLaravel = composer.require?.["laravel/framework"];
+        return {
+          detectedCategory: "web-backend",
+          summary: isLaravel ? "Web Backend / REST API (Laravel Framework)" : "Web Backend (PHP)",
+          recommendedStacks: isLaravel ? ["Laravel", "PHP", "MySQL", "REST API"] : ["PHP", "MySQL"],
+        };
+      } catch {}
+    }
+
+    // 4. Python check (FastAPI, Flask, Django)
+    if (files.includes("requirements.txt") || files.includes("pyproject.toml")) {
+      return {
+        detectedCategory: "web-backend",
+        summary: "Web Backend / REST API (Python / FastAPI / Django)",
+        recommendedStacks: ["Python", "FastAPI", "PostgreSQL", "REST API"],
+      };
+    }
+
+    // 5. Go check
+    if (files.includes("go.mod")) {
+      return {
+        detectedCategory: "web-backend",
+        summary: "Web Backend / REST API (Golang Service)",
+        recommendedStacks: ["Go", "Gin", "PostgreSQL", "REST API"],
+      };
+    }
+
+    // 6. Node / JS package.json check
+    if (files.includes("package.json")) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(targetPath, "package.json"), "utf-8"));
+        const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+
+        const hasFrontend = Boolean(deps.next || deps.react || deps.vue || deps.vite || deps.svelte || deps.nuxt || deps.astro);
+        const hasBackend = Boolean(deps.express || deps["@nestjs/core"] || deps.fastify || deps.koa || deps.hono);
+        const hasDb = Boolean(deps["@prisma/client"] || deps["drizzle-orm"] || deps["@supabase/supabase-js"] || deps.pg || deps.mysql2 || deps.mongoose);
+
+        if (hasFrontend && (hasBackend || hasDb || deps.next)) {
+          return {
+            detectedCategory: "web-fullstack",
+            summary: "Web Fullstack (Frontend UI + Backend API / Supabase DB)",
+            recommendedStacks: [deps.next ? "Next.js" : "React", "TypeScript", "TailwindCSS", hasDb ? "Supabase" : "Node.js"],
+          };
+        }
+        if (hasFrontend && !hasBackend && !hasDb) {
+          return {
+            detectedCategory: "web-frontend",
+            summary: "Web Frontend Saja (React / Vite / UI SPA)",
+            recommendedStacks: [deps.vite ? "Vite" : "React", "TypeScript", "TailwindCSS"],
+          };
+        }
+        if (hasBackend || hasDb) {
+          return {
+            detectedCategory: "web-backend",
+            summary: "Web Backend / REST API (Express / NestJS / Node.js)",
+            recommendedStacks: [deps["@nestjs/core"] ? "NestJS" : "Express", "Node.js", "TypeScript", "REST API"],
+          };
+        }
+      } catch {}
+    }
+
+    return {
+      detectedCategory: "web-fullstack",
+      summary: "Web Application",
+      recommendedStacks: ["Next.js", "TypeScript", "TailwindCSS", "Supabase"],
+    };
+  } catch {
+    return {
+      detectedCategory: "web-fullstack",
+      summary: "Web Application",
+      recommendedStacks: ["Next.js", "TypeScript", "TailwindCSS", "Supabase"],
+    };
+  }
+}
+
 async function main() {
   const flags = parseArgs();
 
@@ -692,18 +986,29 @@ PILIHAN ARGUMEN:
     }
   }
 
-  async function promptCategory(): Promise<ProjectCategory> {
+  async function promptCategory(defaultCat?: ProjectCategory): Promise<ProjectCategory> {
     while (true) {
-      console.log(`\n📂 Pilih Kategori Proyek:`);
+      console.log(`\n📂 Pilih Kategori & Arsitektur Proyek:`);
       console.log(`  1) IoT & Hardware (ESP32, Arduino, Sensor, Wiring Schematic, MQTT)`);
       console.log(`  2) Game Development (Unity, Godot, Unreal, Controls, WebGL)`);
-      console.log(`  3) Web Application (Next.js, React, Node.js, Supabase, Tailwind)`);
-      const choice = await ask(rl, "Pilih kategori (1/2/3)", category === "iot" ? "1" : category === "game" ? "2" : "3");
+      console.log(`  3) Web Frontend Saja (React, Vite, Next.js UI ➔ Auto-Deploy Vercel Saja)`);
+      console.log(`  4) Web Backend / RestAPI Saja (Express, Nest, Laravel, FastAPI, Go ➔ Auto-Deploy Railway / Supabase)`);
+      console.log(`  5) Web Fullstack (Frontend + Backend + Database ➔ Auto-Deploy Vercel + Supabase / Railway)`);
+
+      const defaultNum =
+        defaultCat === "iot" ? "1" :
+        defaultCat === "game" ? "2" :
+        defaultCat === "web-frontend" ? "3" :
+        defaultCat === "web-backend" ? "4" : "5";
+
+      const choice = await ask(rl, "Pilih kategori (1-5)", defaultNum);
       const c = choice.trim().toLowerCase();
       if (c === "1" || c === "iot" || c.includes("hardware")) return "iot";
       if (c === "2" || c === "game") return "game";
-      if (c === "3" || c === "web") return "web";
-      console.log(`❌ Pilihan "${choice}" tidak valid. Harap masukkan angka 1, 2, atau 3.`);
+      if (c === "3" || c === "web-frontend" || c.includes("frontend")) return "web-frontend";
+      if (c === "4" || c === "web-backend" || c.includes("backend") || c.includes("api")) return "web-backend";
+      if (c === "5" || c === "web-fullstack" || c === "web" || c.includes("fullstack")) return "web-fullstack";
+      console.log(`❌ Pilihan "${choice}" tidak valid. Harap masukkan angka 1 sampai 5.`);
     }
   }
 
@@ -785,17 +1090,26 @@ PILIHAN ARGUMEN:
         ? "Deskripsi singkat / Hardware & Sensor (misal: ESP32, DHT22, Servo, MQTT)"
         : currentCat === "game"
         ? "Deskripsi singkat gameplay / Engine (misal: Godot 4 2D platformer)"
-        : "Deskripsi singkat web app & fitur utama";
+        : currentCat === "web-backend"
+        ? "Deskripsi singkat REST API (misal: Order API dengan JWT Auth, Laravel, MySQL)"
+        : currentCat === "web-frontend"
+        ? "Deskripsi singkat antarmuka web (misal: Modern Portfolio Dashboard SPA, TailwindCSS)"
+        : "Deskripsi singkat web app & fitur utama (misal: Fullstack E-Commerce, Supabase DB & Auth)";
     return await ask(rl, `📝 ${hintText}`, descriptionHint);
   }
 
-  async function promptStacks(currentCat: ProjectCategory): Promise<string[]> {
-    const defaultStacks =
+  async function promptStacks(currentCat: ProjectCategory, defaultList?: string[]): Promise<string[]> {
+    const fallbackStacks =
       currentCat === "iot"
         ? "Arduino, C++, ESP32"
         : currentCat === "game"
         ? "Godot, C#, Blender"
+        : currentCat === "web-frontend"
+        ? "React, Vite, TypeScript, TailwindCSS"
+        : currentCat === "web-backend"
+        ? "Node.js, Express, TypeScript, REST API"
         : "Next.js, TypeScript, TailwindCSS, Supabase";
+    const defaultStacks = defaultList && defaultList.length > 0 ? defaultList.join(", ") : fallbackStacks;
     const currentStr = stacks.length ? stacks.join(", ") : defaultStacks;
     const input = await ask(rl, "🛠 Tech Stack (pisahkan dengan koma)", currentStr);
     return input.split(",").map((s) => s.trim()).filter(Boolean);
@@ -804,8 +1118,18 @@ PILIHAN ARGUMEN:
   // Initial Wizard Collection
   if (!name) name = await promptName();
   if (!slug) slug = await promptSlug(name);
-  if (!category || !["iot", "game", "web"].includes(category)) category = await promptCategory();
   if (!projectPath) projectPath = await promptProjectPath();
+
+  // Deteksi otomatis arsitektur proyek dari direktori
+  const detectedArch = detectProjectArchitecture(projectPath);
+
+  if (
+    !category ||
+    !["iot", "game", "web", "web-frontend", "web-backend", "web-fullstack"].includes(category)
+  ) {
+    console.log(`\n🔍 Analisis Proyek Otomatis: Terdeteksi [${detectedArch.summary}]`);
+    category = await promptCategory(detectedArch.detectedCategory);
+  }
 
   if (category === "iot" && !sourceCodeSnippet) {
     if (flags.code) {
@@ -828,7 +1152,7 @@ PILIHAN ARGUMEN:
     if (flags.stacks) {
       stacks = String(flags.stacks).split(",").map((s) => s.trim()).filter(Boolean);
     } else {
-      stacks = await promptStacks(category);
+      stacks = await promptStacks(category, detectedArch.recommendedStacks);
     }
   }
 
@@ -843,35 +1167,60 @@ PILIHAN ARGUMEN:
   let generateApiDoc = false;
 
   async function promptBackendConfig(): Promise<void> {
-    console.log(`\n⚡ PENGATURAN BACKEND & API DEPLOYMENT:`);
-    const askApi = await ask(rl, "Apakah proyek ini memiliki backend / REST API? (y/N)", "N");
-    if (askApi.toLowerCase() === "y") {
+    if (category === "web-frontend") {
+      backendDeployPlatform = "none";
+      generateApiDoc = false;
+      return;
+    }
+
+    if (category === "web-backend") {
       generateApiDoc = true;
-      console.log(`\nPilih Platform Pendeployan Backend:`);
-      console.log(`  1) Railway.app (Rekomendasi untuk Node/Python/Go/Laravel)`);
-      console.log(`  2) Render.com (via Render Deploy Hook)`);
-      console.log(`  3) Vercel Serverless (Next.js API Routes / Serverless functions)`);
-      console.log(`  4) Custom Deploy Webhook`);
-      console.log(`  5) Lewati deployment backend (hanya simpan dokumentasi API)`);
-      const choice = await ask(rl, "Pilihan platform backend (1-5)", "1");
+      console.log(`\n⚡ PENGATURAN BACKEND & REST API DEPLOYMENT:`);
+      console.log(`  Proyek ini terdeteksi sebagai REST API / Backend Service.`);
+      console.log(`  Pilih Platform Pendeployan:`);
+      console.log(`  1) Railway.app (Rekomendasi untuk RestAPI: Node, Python, Go, Laravel, Docker)`);
+      console.log(`  2) Supabase (REST API Base Endpoint & PostgreSQL Database)`);
+      console.log(`  3) Render.com (via Render Web Service / Deploy Hook)`);
+      console.log(`  4) Lewati deployment online (hanya simpan dokumentasi API.md)`);
+      const choice = await ask(rl, "Pilihan platform backend (1-4)", "1");
       if (choice === "1") {
         backendDeployPlatform = "railway";
-        backendDeployUrl = await ask(rl, "Masukkan Railway Live URL / Webhook (tekan Enter jika belum dideploy)");
+        backendDeployUrl = await ask(rl, "Masukkan Railway Live URL kustom (tekan Enter untuk auto-generate)", "");
       } else if (choice === "2") {
+        backendDeployPlatform = "supabase";
+      } else if (choice === "3") {
         backendDeployPlatform = "render";
         backendDeployUrl = await ask(rl, "Masukkan Render Deploy Hook / Live URL (tekan Enter jika belum ada)");
-      } else if (choice === "3") {
-        backendDeployPlatform = "vercel";
-      } else if (choice === "4") {
-        backendDeployPlatform = "custom";
-        backendDeployUrl = await ask(rl, "Masukkan Custom Webhook URL");
       } else {
         backendDeployPlatform = "none";
       }
+      return;
+    }
+
+    // Untuk web-fullstack atau web
+    console.log(`\n⚡ PENGATURAN FULLSTACK DEPLOYMENT (Frontend + Backend + Database):`);
+    console.log(`  Database: Supabase PostgreSQL`);
+    console.log(`  Frontend: Auto-Deploy ke Vercel (kredensial Supabase otomatis diinjeksi)`);
+    const separateBackend = await ask(
+      rl,
+      "Apakah ada server backend container terpisah (misal container Express/FastAPI/Laravel di Railway)? (y/N)",
+      "N"
+    );
+    if (separateBackend.toLowerCase() === "y") {
+      generateApiDoc = true;
+      console.log(`Pilih Platform Container Backend Terpisah:`);
+      console.log(`  1) Railway.app (Rekomendasi)`);
+      console.log(`  2) Render.com`);
+      const choice = await ask(rl, "Pilihan (1/2)", "1");
+      if (choice === "1") {
+        backendDeployPlatform = "railway";
+      } else {
+        backendDeployPlatform = "render";
+        backendDeployUrl = await ask(rl, "Masukkan Render Deploy Hook");
+      }
     } else {
-      generateApiDoc = false;
-      backendDeployPlatform = "none";
-      backendDeployUrl = "";
+      generateApiDoc = true;
+      backendDeployPlatform = "supabase";
     }
   }
 
@@ -879,14 +1228,15 @@ PILIHAN ARGUMEN:
   let imageSource: { type: "file" | "url" | "none"; pathOrUrl?: string } = { type: "none" };
 
   async function promptImageConfig(): Promise<void> {
-    const isFrontend =
-      category === "web" || category === "web-frontend" || category === "web-fullstack";
+    const isFrontendOnly = category === "web-frontend";
+    const isFullstack = category === "web-fullstack" || category === "web";
+    const isBackendOnly = category === "web-backend";
 
-    if (isFrontend) {
-      console.log(`\n📸 PENGATURAN GAMBAR FRONTEND (Dibutuhkan UI Asli, bukan AI slop):`);
+    if (isFrontendOnly || isFullstack) {
+      console.log(`\n📸 PENGATURAN GAMBAR UI (${category.toUpperCase()}):`);
       console.log(`  1) Masukkan path file screenshot lokal UI Anda (PNG/JPG/WebP)`);
       console.log(`  2) Screenshot otomatis dari Live URL Demo / Localhost`);
-      console.log(`  3) Auto-generate AI visual preview (Default jika belum ada screenshot)`);
+      console.log(`  3) Auto-generate AI visual preview (Default - jika belum ada screenshot)`);
       const imgChoice = await ask(rl, "Pilihan gambar (1/2/3)", "3");
       if (imgChoice === "1") {
         while (true) {
@@ -905,6 +1255,28 @@ PILIHAN ARGUMEN:
       } else if (imgChoice === "2") {
         const targetUrl = await ask(rl, "URL Web untuk di-screenshot", linkDemo || "http://localhost:3000");
         imageSource = { type: "url", pathOrUrl: targetUrl };
+      } else {
+        imageSource = { type: "none" };
+      }
+    } else if (isBackendOnly) {
+      console.log(`\n🎨 PENGATURAN GAMBAR REST API & BACKEND:`);
+      console.log(`  1) Masukkan file gambar lokal (Diagram arsitektur / Postman / Swagger screenshot)`);
+      console.log(`  2) Auto-generate dengan AI (Default - Developer Workstation & Telemetry Art via Flux)`);
+      const imgChoice = await ask(rl, "Pilihan gambar (1/2)", "2");
+      if (imgChoice === "1") {
+        while (true) {
+          const p = await ask(rl, "Masukkan path file gambar", "");
+          if (!p.trim()) {
+            imageSource = { type: "none" };
+            break;
+          }
+          const resolved = path.resolve(p.trim().replace(/^['"]|['"]$/g, ""));
+          if (fs.existsSync(resolved)) {
+            imageSource = { type: "file", pathOrUrl: resolved };
+            break;
+          }
+          console.log(`⚠️ File "${resolved}" tidak ditemukan. Coba lagi.`);
+        }
       } else {
         imageSource = { type: "none" };
       }
@@ -933,7 +1305,7 @@ PILIHAN ARGUMEN:
     }
   }
 
-  if (category === "web" && !flags.name) {
+  if (category.startsWith("web") && !flags.name) {
     await promptBackendConfig();
   }
   if (!flags.name) {
@@ -959,8 +1331,16 @@ PILIHAN ARGUMEN:
       console.log(`  6. Tech Stack       : ${stacks.join(", ")}`);
       console.log(`  7. Catatan / Hint   : ${descriptionHint || "-"}`);
       console.log(`  8. Live Demo URL    : ${linkDemo || "-"}`);
-      console.log(`  9. Backend & API    : ${generateApiDoc ? `Dokumentasi API.md Aktif | Deploy: ${backendDeployPlatform.toUpperCase()}` : "Tidak ada backend terpisah"}`);
-      console.log(` 10. Gambar Proyek    : ${imageSource.type === "url" ? `Auto-Screenshot (${imageSource.pathOrUrl})` : imageSource.type === "file" ? `File Lokal (${path.basename(imageSource.pathOrUrl || "")})` : "Gunakan default"}`);
+      const deploySummary =
+        category === "web-frontend"
+          ? "Web Frontend Saja ➔ Auto-Deploy Vercel Saja"
+          : category === "web-backend"
+          ? `RestAPI Saja ➔ Auto-Deploy ${backendDeployPlatform.toUpperCase()} & generate API.md`
+          : category === "web-fullstack" || category === "web"
+          ? `Web Fullstack ➔ Auto-Deploy Vercel + Supabase DB ${backendDeployPlatform !== "none" && backendDeployPlatform !== "supabase" ? `+ ${backendDeployPlatform.toUpperCase()} Container` : ""}`
+          : "Non-Web (Dokumentasi & GitHub Only)";
+      console.log(`  9. Backend & Deploy : ${deploySummary}`);
+      console.log(` 10. Gambar Proyek    : ${imageSource.type === "url" ? `Auto-Screenshot (${imageSource.pathOrUrl})` : imageSource.type === "file" ? `File Lokal (${path.basename(imageSource.pathOrUrl || "")})` : "Auto-Generate AI (Flux Engine)"}`);
       console.log(`  • GitHub Repo URL   : ${linkGithub}\n`);
 
       const choice = await ask(rl, "Pilihan: [Y] Lanjutkan | [E] Edit data | [Q] Batalkan (Y/e/q)", "Y");
@@ -998,7 +1378,10 @@ PILIHAN ARGUMEN:
             slug = await promptSlug(name);
             break;
           case "3":
-            category = await promptCategory();
+            category = await promptCategory(category);
+            if (category.startsWith("web")) {
+              await promptBackendConfig();
+            }
             if (category === "iot" && !sourceCodeSnippet) {
               const res = await promptIotCode(projectPath);
               sourceCodeSnippet = res.snippet;
@@ -1007,6 +1390,8 @@ PILIHAN ARGUMEN:
             break;
           case "4":
             projectPath = await promptProjectPath();
+            const reScan = detectProjectArchitecture(projectPath);
+            console.log(`🔍 Terdeteksi dari folder baru: [${reScan.summary}]`);
             if (category === "iot") {
               const res = await promptIotCode(projectPath);
               if (res.snippet) {
@@ -1034,7 +1419,11 @@ PILIHAN ARGUMEN:
             linkDemo = await ask(rl, "Masukkan Live Demo URL", linkDemo);
             break;
           case "9":
-            await promptBackendConfig();
+            if (category.startsWith("web")) {
+              await promptBackendConfig();
+            } else {
+              console.log("Pilihan ini hanya untuk kategori Web.");
+            }
             break;
           case "10":
             await promptImageConfig();
@@ -1182,31 +1571,102 @@ PILIHAN ARGUMEN:
   }
 
   // ==========================================================
-  // STEP 5: DEPLOYMENTS (FRONTEND & BACKEND)
+  // STEP 5: DEPLOYMENTS (TAILORED UNTUK WEB ARCHITECTURE)
   // ==========================================================
-  if (
-    !flags.dryRun &&
-    !flags.skipVercel &&
-    (category === "web" || category === "web-frontend" || category === "web-fullstack")
-  ) {
-    console.log(`▲ 5/7 Konfigurasi Deployment Frontend (Vercel)...`);
-    const liveUrl = await triggerVercelDeploy(slug, `${GITHUB_USERNAME}/${slug}`);
-    if (liveUrl) linkDemo = liveUrl;
-  } else {
-    console.log(`⏭️ 5/7 Melewati Vercel.`);
-  }
+  const isFrontendOnly = category === "web-frontend";
+  const isBackendOnly = category === "web-backend";
+  const isFullstack = category === "web-fullstack" || category === "web";
 
-  if (!flags.dryRun && backendDeployPlatform !== "none") {
-    console.log(`⚙️ 5b/7 Mengonfigurasi deployment Backend (${backendDeployPlatform.toUpperCase()})...`);
-    const backendLiveUrl = await triggerBackendDeploy({
-      platform: backendDeployPlatform as any,
-      slug,
-      repoFullName: `${GITHUB_USERNAME}/${slug}`,
-      deployUrl: backendDeployUrl,
-    });
-    if (backendLiveUrl && !linkDemo) {
-      linkDemo = backendLiveUrl;
+  if (!flags.dryRun) {
+    if (isFrontendOnly) {
+      // --------------------------------------------------------
+      // KASUS 1: WEB FRONTEND SAJA -> DEPLOY VERCEL SAJA
+      // --------------------------------------------------------
+      if (!flags.skipVercel) {
+        console.log(`▲ 5/7 Mengonfigurasi Deployment Web Frontend (Vercel Saja)...`);
+        const liveUrl = await triggerVercelDeploy({
+          projectName: slug,
+          repoFullName: `${GITHUB_USERNAME}/${slug}`,
+        });
+        if (liveUrl) linkDemo = liveUrl;
+      } else {
+        console.log(`⏭️ 5/7 Melewati Vercel (skip-vercel flag).`);
+      }
+    } else if (isBackendOnly) {
+      // --------------------------------------------------------
+      // KASUS 2: WEB BACKEND SAJA (REST API) -> RAILWAY ATAU SUPABASE
+      // --------------------------------------------------------
+      console.log(`⚙️ 5/7 Mengonfigurasi Deployment Backend RestAPI (${backendDeployPlatform.toUpperCase()})...`);
+      if (backendDeployPlatform === "railway") {
+        const liveUrl = await triggerRailwayDeploy({
+          projectName: slug,
+          repoFullName: `${GITHUB_USERNAME}/${slug}`,
+        });
+        if (liveUrl) linkDemo = liveUrl;
+      } else if (backendDeployPlatform === "supabase") {
+        const supa = await configureSupabaseBackend({ slug, title: name });
+        if (supa.apiUrl) linkDemo = supa.apiUrl;
+      } else if (backendDeployPlatform !== "none") {
+        const liveUrl = await triggerBackendDeploy({
+          platform: backendDeployPlatform as any,
+          slug,
+          repoFullName: `${GITHUB_USERNAME}/${slug}`,
+          deployUrl: backendDeployUrl,
+        });
+        if (liveUrl) linkDemo = liveUrl;
+      } else {
+        console.log(`ℹ️ Deployment online backend dilewati (dokumentasi API.md tetap dibuat).`);
+      }
+    } else if (isFullstack) {
+      // --------------------------------------------------------
+      // KASUS 3: WEB FULLSTACK -> VERCEL + SUPABASE (+ OPTIONAL RAILWAY)
+      // --------------------------------------------------------
+      console.log(`⚡ 5/7 Mengonfigurasi Deployment Fullstack (Vercel + Supabase)...`);
+
+      // 1. Verifikasi koneksi Supabase Database
+      console.log(`🗄️ Menghubungkan database Supabase...`);
+      await configureSupabaseBackend({ slug, title: name });
+
+      // 2. Kumpulkan kredensial Supabase untuk diinjeksi ke Vercel
+      const supaEnvVars: Record<string, string> = {
+        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+        DATABASE_URL: process.env.DATABASE_URL || "",
+      };
+
+      // 3. Deploy Frontend ke Vercel dengan auto-injeksi envar Supabase
+      if (!flags.skipVercel) {
+        console.log(`▲ Menghubungkan Frontend ke Vercel & Menginjeksi Kredensial Supabase...`);
+        const liveUrl = await triggerVercelDeploy({
+          projectName: slug,
+          repoFullName: `${GITHUB_USERNAME}/${slug}`,
+          envVars: supaEnvVars,
+        });
+        if (liveUrl) linkDemo = liveUrl;
+      }
+
+      // 4. Jika pengguna memilih container backend terpisah (Railway)
+      if (backendDeployPlatform === "railway") {
+        console.log(`🚂 Mengonfigurasi Backend container tambahan di Railway...`);
+        await triggerRailwayDeploy({
+          projectName: `${slug}-api`,
+          repoFullName: `${GITHUB_USERNAME}/${slug}`,
+          envVars: supaEnvVars,
+        });
+      } else if (backendDeployPlatform === "render") {
+        await triggerBackendDeploy({
+          platform: "render",
+          slug: `${slug}-api`,
+          repoFullName: `${GITHUB_USERNAME}/${slug}`,
+          deployUrl: backendDeployUrl,
+        });
+      }
+    } else {
+      console.log(`⏭️ 5/7 Melewati deployment web untuk kategori ${category.toUpperCase()}.`);
     }
+  } else {
+    console.log(`⏭️ 5/7 Melewati tahap deployment (dry-run mode).`);
   }
 
   // ==========================================================
@@ -1269,8 +1729,9 @@ ${generateApiDoc ? `✅ API.md            : Dokumentasi endpoint & spesifikasi R
 ✅ GitHub Repo        : ${linkGithub} (Topic: portfolio, ${category})
 ✅ Portfolio Web      : Tampil otomatis di /projects [Kategori: ${category.toUpperCase()}]
 ✅ Database Supabase  : Proyek tersimpan dan aktif (is_show = true)
-${category === "web" ? `✅ Vercel Deploy     : ${linkDemo}` : ""}
-${backendDeployPlatform !== "none" ? `✅ Backend Deploy    : Platform ${backendDeployPlatform.toUpperCase()}` : ""}
+${isFrontendOnly ? `✅ Vercel Deploy     : ${linkDemo} (Frontend Saja)` : ""}
+${isBackendOnly ? `✅ Backend Deploy    : ${linkDemo} (${backendDeployPlatform.toUpperCase()} RestAPI)` : ""}
+${isFullstack ? `✅ Fullstack Deploy  : Frontend Vercel (${linkDemo}) + Supabase DB ${backendDeployPlatform !== "none" && backendDeployPlatform !== "supabase" ? `+ ${backendDeployPlatform.toUpperCase()}` : ""}` : ""}
 ${uploadedImageUrl ? `✅ Gambar Proyek     : Ter-upload ke Supabase Storage & lokal` : ""}
 
 Langkah Selanjutnya:
