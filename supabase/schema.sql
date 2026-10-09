@@ -49,3 +49,4 @@ ON CONFLICT (id) DO NOTHING;
 CREATE POLICY "Public read project images"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'projects');
+  
