@@ -4,11 +4,31 @@
  * Run: bun run scripts/sync-from-github.ts  or  npx tsx scripts/sync-from-github.ts
  * Env: GITHUB_READ_USER_TOKEN_PERSONAL, SUPABASE_*, GEMINI_API_KEY, PORTFOLIO_REPO, PORTFOLIO_GITHUB_TOKEN
  */
+import fs from "fs";
+import path from "path";
 import axios from "axios";
 import { createServiceClient } from "../common/utils/supabase-service";
 import { detectCategory } from "../common/libs/detect-category";
 import { generateReadme } from "../common/libs/readme-template";
 import { buildSyncLog, persistSyncLog } from "../common/libs/sync-logger";
+
+// Load environment variables if not already loaded
+if (!process.env.GITHUB_READ_USER_TOKEN_PERSONAL && fs.existsSync(path.join(process.cwd(), ".env"))) {
+  const envContent = fs.readFileSync(path.join(process.cwd(), ".env"), "utf-8");
+  envContent.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const idx = trimmed.indexOf("=");
+      if (idx !== -1) {
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim();
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  });
+}
 
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME || "saecar";
 const GITHUB_TOKEN = process.env.GITHUB_READ_USER_TOKEN_PERSONAL;
@@ -31,7 +51,7 @@ type GhRepo = {
 async function fetchPortfolioRepos(): Promise<GhRepo[]> {
   if (!GITHUB_TOKEN) throw new Error("Missing GITHUB_READ_USER_TOKEN_PERSONAL");
   const res = await axios.get(`https://api.github.com/user/repos`, {
-    headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
+    headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" },
     params: { per_page: 100, sort: "updated", affiliation: "owner" },
   });
   const repos: any[] = res.data;
@@ -43,7 +63,7 @@ async function fetchPortfolioRepos(): Promise<GhRepo[]> {
     if (!r.topics) {
       try {
         const t = await axios.get(`https://api.github.com/repos/${r.full_name}/topics`, {
-          headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
+          headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" },
         });
         topics = t.data.names || t.data.topics || [];
       } catch {
@@ -61,7 +81,7 @@ async function fetchPackageJson(fullName: string): Promise<Record<string, any> |
   if (!GITHUB_TOKEN) return undefined;
   try {
     const res = await axios.get(`https://api.github.com/repos/${fullName}/contents/package.json`, {
-      headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
     });
     const content = Buffer.from(res.data.content, "base64").toString("utf-8");
     return JSON.parse(content);
@@ -74,7 +94,7 @@ async function fetchRepoFileList(fullName: string): Promise<Array<{ path: string
   if (!GITHUB_TOKEN) return [];
   try {
     const res = await axios.get(`https://api.github.com/repos/${fullName}/git/trees/HEAD`, {
-      headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
       params: { recursive: "1" },
     });
     const tree: any[] = res.data.tree || [];
@@ -89,11 +109,15 @@ async function pushMdx(cleanSlug: string, readme: string) {
     console.warn(`[sync] PORTFOLIO_GITHUB_TOKEN missing — skip MDX push for ${cleanSlug}`);
     return;
   }
+  const safeMdxContent = readme
+    .replace(/<img([^>]*?)(?<!\/)>/gi, "<img$1 />")
+    .replace(/<br(?!\s*\/)>/gi, "<br />")
+    .replace(/<hr(?!\s*\/)>/gi, "<hr />");
   const mdxPath = `contents/projects/${cleanSlug}.mdx`;
   let sha: string | undefined;
   try {
     const check = await axios.get(`https://api.github.com/repos/${PORTFOLIO_REPO}/contents/${mdxPath}`, {
-      headers: { Authorization: `token ${PORTFOLIO_GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
+      headers: { Authorization: `Bearer ${PORTFOLIO_GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" },
     });
     sha = check.data.sha;
   } catch (e: any) {
@@ -103,10 +127,10 @@ async function pushMdx(cleanSlug: string, readme: string) {
     `https://api.github.com/repos/${PORTFOLIO_REPO}/contents/${mdxPath}`,
     {
       message: `chore(projects): sync ${cleanSlug} via cron`,
-      content: Buffer.from(readme, "utf-8").toString("base64"),
+      content: Buffer.from(safeMdxContent, "utf-8").toString("base64"),
       ...(sha ? { sha } : {}),
     },
-    { headers: { Authorization: `token ${PORTFOLIO_GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+    { headers: { Authorization: `Bearer ${PORTFOLIO_GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
   );
 }
 
