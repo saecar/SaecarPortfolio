@@ -15,7 +15,6 @@ import axios from "axios";
 import { generateReadme, generateApiReadme, ProjectCategory } from "../common/libs/readme-template";
 import { createServiceClient } from "../common/utils/supabase-service";
 import { detectCategory } from "../common/libs/detect-category";
-import sharp from "sharp";
 
 // Load environment variables if not already loaded
 if (!process.env.GEMINI_API_KEY && fs.existsSync(path.join(process.cwd(), ".env"))) {
@@ -76,7 +75,7 @@ function sanitizeTopics(rawTopics: string[]): string[] {
   return Array.from(set).slice(0, 20);
 }
 
-function sanitizeSlug(title: string): string {
+export function sanitizeSlug(title: string): string {
   const clean = title
     .toLowerCase()
     .trim()
@@ -106,6 +105,12 @@ function parseArgs(): Record<string, string | boolean> {
     else if (arg === "--stacks") result.stacks = args[++i];
     else if (arg === "--demo") result.demo = args[++i];
     else if (arg === "--code") result.code = args[++i];
+    else if (arg === "--backend-platform" || arg === "--backend") result.backendPlatform = args[++i];
+    else if (arg === "--backend-url") result.backendUrl = args[++i];
+    else if (arg === "--api-doc") result.apiDoc = true;
+    else if (arg === "--image-type") result.imageType = args[++i];
+    else if (arg === "--image-path") result.imagePath = args[++i];
+    else if (arg === "--non-interactive" || arg === "-y" || arg === "--yes") result.nonInteractive = true;
   }
 
   return result;
@@ -327,7 +332,7 @@ async function createOrUpdateGithubRepo(
 const createGithubRepo = (name: string, description: string, isPrivate: boolean, topics: string[]) =>
   createOrUpdateGithubRepo(name, description, isPrivate, topics).then((r) => r?.data ?? null);
 
-async function fetchRecentGithubRepos(): Promise<any[]> {
+export async function fetchRecentGithubRepos(): Promise<any[]> {
   if (!GITHUB_TOKEN) return [];
   try {
     const res = await axios.get(`https://api.github.com/user/repos`, {
@@ -344,7 +349,7 @@ async function fetchRecentGithubRepos(): Promise<any[]> {
   }
 }
 
-async function fetchSupabaseProjects(): Promise<any[]> {
+export async function fetchSupabaseProjects(): Promise<any[]> {
   try {
     const supa = createServiceClient();
     const { data } = await supa
@@ -797,10 +802,15 @@ async function processAndUploadProjectImage({
     }
 
     if (imageBuffer) {
-      const webpBuf = await sharp(imageBuffer)
-        .resize(1200, 675, { fit: "cover", position: "center" })
-        .webp({ quality: 88 })
-        .toBuffer();
+      let webpBuf = imageBuffer;
+      try {
+        const sharpModule: any = await import("sharp");
+        const sharp = sharpModule.default || sharpModule;
+        webpBuf = await sharp(imageBuffer)
+          .resize(1200, 675, { fit: "cover", position: "center" })
+          .webp({ quality: 88 })
+          .toBuffer();
+      } catch {}
 
       fs.writeFileSync(localFilePath, webpBuf);
       console.log(`💾 Gambar tersimpan di: public/images/projects/${slug}.webp`);
@@ -893,7 +903,7 @@ async function upsertSupabaseProject(data: {
   }
 }
 
-function detectProjectArchitecture(targetPath: string): {
+export function detectProjectArchitecture(targetPath: string): {
   detectedCategory: ProjectCategory;
   summary: string;
   recommendedStacks: string[];
@@ -1452,9 +1462,19 @@ PILIHAN ARGUMEN:
   }
 
   // Pengaturan Backend & Pendeployan Tambahan
-  let backendDeployPlatform: string = "none";
-  let backendDeployUrl = "";
-  let generateApiDoc = false;
+  let backendDeployPlatform: string = flags.backendPlatform ? String(flags.backendPlatform) : "none";
+  let backendDeployUrl = flags.backendUrl ? String(flags.backendUrl) : "";
+  let generateApiDoc = Boolean(flags.apiDoc);
+
+  if (!flags.backendPlatform) {
+    if (category === "web-backend") {
+      backendDeployPlatform = "railway";
+      generateApiDoc = true;
+    } else if (category === "web-fullstack" || category === "web") {
+      backendDeployPlatform = "supabase";
+      generateApiDoc = true;
+    }
+  }
 
   async function promptBackendConfig(): Promise<void> {
     if (category === "web-frontend") {
@@ -1515,7 +1535,10 @@ PILIHAN ARGUMEN:
   }
 
   // Pengaturan Gambar Proyek
-  let imageSource: { type: "file" | "url" | "none"; pathOrUrl?: string } = { type: "none" };
+  let imageSource: { type: "file" | "url" | "none"; pathOrUrl?: string } = {
+    type: (flags.imageType as any) || "none",
+    pathOrUrl: flags.imagePath ? String(flags.imagePath) : undefined,
+  };
 
   async function promptImageConfig(): Promise<void> {
     const isFrontendOnly = category === "web-frontend";
@@ -1595,17 +1618,17 @@ PILIHAN ARGUMEN:
     }
   }
 
-  if (category.startsWith("web") && !flags.name) {
+  if (category.startsWith("web") && !flags.name && !flags.nonInteractive) {
     await promptBackendConfig();
   }
-  if (!flags.name) {
+  if (!flags.name && !flags.nonInteractive) {
     await promptImageConfig();
   }
 
   // ==========================================================
   // REVIEW & EDIT LOOP (Jika user salah input, BISA DIUBAH!)
   // ==========================================================
-  if (!flags.name) {
+  if (!flags.name && !flags.nonInteractive) {
     while (true) {
       const linkGithub = `https://github.com/${GITHUB_USERNAME}/${slug}`;
       console.log(`\n╔═══════════════════════════════════════════════════════════╗`);
@@ -1753,6 +1776,10 @@ PILIHAN ARGUMEN:
       });
     } catch (err: any) {
       console.warn(`\n⚠️ Terjadi kendala saat generate via AI: ${err.message}`);
+      if (flags.nonInteractive || flags.name) {
+        console.log("Menggunakan template README standar...");
+        break;
+      }
       const fallbackPrompt = readline.createInterface({ input: process.stdin, output: process.stdout });
       const retryChoice = await ask(fallbackPrompt, "[R] Coba lagi | [F] Gunakan template standar | [Q] Batalkan (R/f/q)", "R");
       fallbackPrompt.close();
@@ -1879,6 +1906,21 @@ PILIHAN ARGUMEN:
             execSync(`git push -u origin main`, { cwd: projectPath, stdio: "inherit" });
           } catch (normalPushErr: any) {
             console.warn(`\n⚠️ Push standar ditolak (mungkin ada commit baru di remote).`);
+            if (flags.nonInteractive || flags.name) {
+              console.log("Mencoba auto-pull rebase dan push ulang...");
+              try {
+                try {
+                  execSync(`git pull --rebase origin main`, { cwd: projectPath, stdio: "inherit" });
+                } catch {
+                  execSync(`git pull origin main --allow-unrelated-histories --no-rebase -X theirs`, { cwd: projectPath, stdio: "inherit" });
+                }
+                execSync(`git push -u origin main`, { cwd: projectPath, stdio: "inherit" });
+              } catch (e: any) {
+                console.warn(`⚠️ Git push otomatis dilewati: ${e.message}`);
+                break;
+              }
+              break;
+            }
             const retryPrompt = readline.createInterface({ input: process.stdin, output: process.stdout });
             const fc = await ask(
               retryPrompt,
@@ -1913,6 +1955,10 @@ PILIHAN ARGUMEN:
         pushSuccess = true;
       } catch (err: any) {
         console.warn(`\n⚠️ Git push belum berhasil: ${err.message}`);
+        if (flags.nonInteractive || flags.name) {
+          console.log("Melanjutkan proses tanpa push GitHub...");
+          break;
+        }
         const retryPrompt = readline.createInterface({ input: process.stdin, output: process.stdout });
         const pChoice = await ask(retryPrompt, "[R] Coba push lagi | [S] Lewati tahap GitHub | [Q] Batalkan (R/s/q)", "S");
         retryPrompt.close();
@@ -2061,39 +2107,43 @@ PILIHAN ARGUMEN:
   }
 
   // Tulis MDX ke contents/projects/
-  const mdxDir = path.join(portfolioRootDir, "contents", "projects");
-  if (fs.existsSync(mdxDir)) {
-    const mdxFile = path.join(mdxDir, `${slug}.mdx`);
-    const safeMdxContent = readme
-      .replace(/<img([^>]*?)(?<!\/)>/gi, "<img$1 />")
-      .replace(/<br(?!\s*\/)>/gi, "<br />")
-      .replace(/<hr(?!\s*\/)>/gi, "<hr />");
-    fs.writeFileSync(mdxFile, safeMdxContent, "utf-8");
-    console.log(`📝 Berhasil membuat file MDX portfolio: contents/projects/${slug}.mdx`);
+  if (!flags.dryRun) {
+    const mdxDir = path.join(portfolioRootDir, "contents", "projects");
+    if (fs.existsSync(mdxDir)) {
+      const mdxFile = path.join(mdxDir, `${slug}.mdx`);
+      const safeMdxContent = readme
+        .replace(/<img([^>]*?)(?<!\/)>/gi, "<img$1 />")
+        .replace(/<br(?!\s*\/)>/gi, "<br />")
+        .replace(/<hr(?!\s*\/)>/gi, "<hr />");
+      fs.writeFileSync(mdxFile, safeMdxContent, "utf-8");
+      console.log(`📝 Berhasil membuat file MDX portfolio: contents/projects/${slug}.mdx`);
 
-    try {
-      execSync(`git add contents/projects/${slug}.mdx`, { cwd: portfolioRootDir, stdio: "ignore" });
-      const localImagePath = path.join(portfolioRootDir, "public", "images", "projects", `${slug}.webp`);
-      if (fs.existsSync(localImagePath)) {
-        execSync(`git add public/images/projects/${slug}.webp`, { cwd: portfolioRootDir, stdio: "ignore" });
-      }
-      const statusPorcelain = execSync("git status --porcelain", { cwd: portfolioRootDir, encoding: "utf-8" }).trim();
-      if (statusPorcelain) {
-        execSync(`git commit -m "feat(projects): ${isUpdateMode ? "update" : "add"} ${name} [${category}]"`, {
-          cwd: portfolioRootDir,
-          stdio: "ignore",
-        });
-        console.log(`🎉 Berhasil commit perubahan ke repositori portfolio!`);
-      }
       try {
-        execSync(`git push origin main`, { cwd: portfolioRootDir, stdio: "ignore" });
-        console.log(`🚀 Berhasil push update MDX ke repositori portfolio online!`);
-      } catch (pushErr: any) {
-        console.warn(`ℹ️ Push MDX ke origin portfolio dilewati atau gagal: ${pushErr.message}`);
+        execSync(`git add contents/projects/${slug}.mdx`, { cwd: portfolioRootDir, stdio: "ignore" });
+        const localImagePath = path.join(portfolioRootDir, "public", "images", "projects", `${slug}.webp`);
+        if (fs.existsSync(localImagePath)) {
+          execSync(`git add public/images/projects/${slug}.webp`, { cwd: portfolioRootDir, stdio: "ignore" });
+        }
+        const statusPorcelain = execSync("git status --porcelain", { cwd: portfolioRootDir, encoding: "utf-8" }).trim();
+        if (statusPorcelain) {
+          execSync(`git commit -m "feat(projects): ${isUpdateMode ? "update" : "add"} ${name} [${category}]"`, {
+            cwd: portfolioRootDir,
+            stdio: "ignore",
+          });
+          console.log(`🎉 Berhasil commit perubahan ke repositori portfolio!`);
+        }
+        try {
+          execSync(`git push origin main`, { cwd: portfolioRootDir, stdio: "ignore" });
+          console.log(`🚀 Berhasil push update MDX ke repositori portfolio online!`);
+        } catch (pushErr: any) {
+          console.warn(`ℹ️ Push MDX ke origin portfolio dilewati atau gagal: ${pushErr.message}`);
+        }
+      } catch (gitErr: any) {
+        console.warn(`⚠️ Catatan git portfolio: ${gitErr.message}`);
       }
-    } catch (gitErr: any) {
-      console.warn(`⚠️ Catatan git portfolio: ${gitErr.message}`);
     }
+  } else {
+    console.log(`⏭️ 7/7 Melewati pembuatan file MDX & git push portfolio (dry-run mode).`);
   }
 
   console.log(`
@@ -2117,7 +2167,10 @@ Langkah Selanjutnya:
 `);
 }
 
-main().catch((err) => {
-  console.error("\n❌ Terjadi kesalahan:", err.message || err);
-  process.exit(1);
-});
+// Only run main() if executed directly from CLI, not when imported as module
+if ((import.meta as any).main || (typeof require !== "undefined" && require.main === module)) {
+  main().catch((err) => {
+    console.error("\n❌ Terjadi kesalahan:", err.message || err);
+    process.exit(1);
+  });
+}
