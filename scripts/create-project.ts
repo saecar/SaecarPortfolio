@@ -14,6 +14,7 @@ import { execSync } from "child_process";
 import axios from "axios";
 import { generateReadme, generateApiReadme, ProjectCategory } from "../common/libs/readme-template";
 import { createServiceClient } from "../common/utils/supabase-service";
+import { detectCategory } from "../common/libs/detect-category";
 import sharp from "sharp";
 
 // Load environment variables if not already loaded
@@ -36,6 +37,8 @@ if (!process.env.GEMINI_API_KEY && fs.existsSync(path.join(process.cwd(), ".env"
 
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME || "saecar";
 const GITHUB_TOKEN = process.env.GITHUB_READ_USER_TOKEN_PERSONAL || process.env.PORTFOLIO_GITHUB_TOKEN;
+const PORTFOLIO_REPO = process.env.PORTFOLIO_REPO || "saecar/SaecarPortfolio";
+const portfolioRootDir = path.resolve(__dirname, "..");
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 
 function sanitizeSlug(title: string): string {
@@ -59,6 +62,7 @@ function parseArgs(): Record<string, string | boolean> {
     else if (arg === "--skip-github") result.skipGithub = true;
     else if (arg === "--skip-supabase") result.skipSupabase = true;
     else if (arg === "--skip-vercel") result.skipVercel = true;
+    else if (arg === "--update" || arg === "-u") result.update = true;
     else if (arg === "--name" || arg === "-n") result.name = args[++i];
     else if (arg === "--slug" || arg === "-s") result.slug = args[++i];
     else if (arg === "--category" || arg === "-c") result.category = args[++i];
@@ -181,7 +185,13 @@ out/
 `;
 }
 
-async function createGithubRepo(name: string, description: string, isPrivate: boolean, topics: string[]) {
+async function createOrUpdateGithubRepo(
+  name: string,
+  description: string,
+  isPrivate: boolean,
+  topics: string[],
+  homepage?: string
+): Promise<{ data: any; isExisting: boolean } | null> {
   if (!GITHUB_TOKEN || GITHUB_TOKEN === "your_github_token") {
     console.warn("⚠️ GITHUB_READ_USER_TOKEN_PERSONAL belum diisi di .env!");
     console.warn("  -> Melewati pembuatan otomatis repo di GitHub API.");
@@ -200,13 +210,32 @@ async function createGithubRepo(name: string, description: string, isPrivate: bo
       const check = await axios.get(`https://api.github.com/repos/${GITHUB_USERNAME}/${name}`, { headers });
       if (check.status === 200) {
         console.log(`ℹ️ Repositori GitHub ${GITHUB_USERNAME}/${name} sudah ada.`);
+        console.log(`🔄 Memperbarui metadata repositori GitHub (deskripsi & topics)...`);
+
+        // Update description & homepage
+        try {
+          await axios.patch(
+            `https://api.github.com/repos/${GITHUB_USERNAME}/${name}`,
+            {
+              description: description || check.data.description,
+              homepage: homepage || check.data.homepage || undefined,
+            },
+            { headers }
+          );
+        } catch (patchErr: any) {
+          console.warn(`⚠️ Catatan: Gagal update deskripsi repo GitHub (${patchErr.message})`);
+        }
+
         // Update topics
-        await axios.put(
-          `https://api.github.com/repos/${GITHUB_USERNAME}/${name}/topics`,
-          { names: topics.map((t) => t.toLowerCase().replace(/[^a-z0-9-]+/g, "").slice(0, 35)).filter(Boolean) },
-          { headers: { ...headers, Accept: "application/vnd.github.mercy-preview+json" } }
-        );
-        return check.data;
+        if (topics.length > 0) {
+          await axios.put(
+            `https://api.github.com/repos/${GITHUB_USERNAME}/${name}/topics`,
+            { names: topics.map((t) => t.toLowerCase().replace(/[^a-z0-9-]+/g, "").slice(0, 35)).filter(Boolean) },
+            { headers: { ...headers, Accept: "application/vnd.github.mercy-preview+json" } }
+          );
+        }
+        console.log(`✅ Repositori GitHub ${GITHUB_USERNAME}/${name} berhasil diperbarui!`);
+        return { data: check.data, isExisting: true };
       }
     } catch (e: any) {
       if (e.response?.status !== 404) throw e;
@@ -224,6 +253,7 @@ async function createGithubRepo(name: string, description: string, isPrivate: bo
         has_issues: true,
         has_projects: true,
         has_wiki: false,
+        homepage: homepage || undefined,
       },
       { headers }
     );
@@ -237,10 +267,44 @@ async function createGithubRepo(name: string, description: string, isPrivate: bo
       );
     }
 
-    return res.data;
+    return { data: res.data, isExisting: false };
   } catch (err: any) {
-    console.error("❌ Gagal membuat repo di GitHub:", err.response?.data?.message || err.message);
+    console.error("❌ Gagal membuat/mengupdate repo di GitHub:", err.response?.data?.message || err.message);
     return null;
+  }
+}
+
+// Alias for backwards compatibility
+const createGithubRepo = (name: string, description: string, isPrivate: boolean, topics: string[]) =>
+  createOrUpdateGithubRepo(name, description, isPrivate, topics).then((r) => r?.data ?? null);
+
+async function fetchRecentGithubRepos(): Promise<any[]> {
+  if (!GITHUB_TOKEN) return [];
+  try {
+    const res = await axios.get(`https://api.github.com/user/repos`, {
+      headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Portfolio-Automation-CLI",
+      },
+      params: { affiliation: "owner", sort: "updated", per_page: 30 },
+    });
+    return res.data || [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchSupabaseProjects(): Promise<any[]> {
+  try {
+    const supa = createServiceClient();
+    const { data } = await supa
+      .from("projects")
+      .select("slug, title, category, stacks, description, link_demo, link_github")
+      .order("created_at", { ascending: false });
+    return data || [];
+  } catch {
+    return [];
   }
 }
 
@@ -741,19 +805,21 @@ async function upsertSupabaseProject(data: {
 
   try {
     const supa = createServiceClient();
-    const row = {
+    const row: Record<string, any> = {
       slug: data.slug,
       title: data.title,
       description: data.description,
       stacks: data.stacks,
       link_github: data.linkGithub,
       link_demo: data.linkDemo || null,
-      image: data.image || null,
       category: data.category,
       is_show: true,
       auto_generated: true,
       last_synced_at: new Date().toISOString(),
     };
+    if (data.image) {
+      row.image = data.image;
+    }
 
     const { error } = await supa.from("projects").upsert(row, { onConflict: "slug" }).select();
     if (error) {
@@ -932,6 +998,7 @@ PILIHAN ARGUMEN:
   --stacks <a,b,c>        Tech stack dipisah koma (contoh: "ESP32,C++,PlatformIO")
   --demo <url>            URL Demo / Live Preview
   --code <file|teks>      Path file kode firmware atau kode sumber (auto-deteksi diagram wiring)
+  -u, --update            Mode update proyek / repositori yang sudah ada
   --dry-run               Jalankan simulasi tanpa push ke GitHub/Supabase
   --skip-github           Lewati pembuatan repo GitHub
   --skip-supabase         Lewati simpan ke Supabase
@@ -1014,11 +1081,47 @@ PILIHAN ARGUMEN:
 
   async function promptProjectPath(): Promise<string> {
     while (true) {
-      const defaultDir = projectPath || process.cwd();
+      const defaultDir =
+        projectPath ||
+        (isUpdateMode && slug && fs.existsSync(path.resolve(process.cwd(), "..", slug))
+          ? path.resolve(process.cwd(), "..", slug)
+          : process.cwd());
       const val = await ask(rl, "📁 Path folder proyek", defaultDir);
       const resolved = path.resolve(val);
 
+      if (resolved === portfolioRootDir) {
+        console.log(`\nℹ️ Path ini adalah repositori Portfolio utama Anda (satriabahari.my.id / SaecarPortfolio).`);
+        const confirmSelf = await ask(
+          rl,
+          "Apakah Anda ingin memperbarui dokumentasi/data portfolio utama ini sendiri? (Y/n)",
+          "Y"
+        );
+        if (confirmSelf.toLowerCase() !== "n") {
+          return resolved;
+        } else {
+          continue;
+        }
+      }
+
       if (fs.existsSync(resolved)) {
+        // Cek apakah folder memiliki git remote yang sudah ada
+        try {
+          const originUrl = execSync("git remote get-url origin", { cwd: resolved, encoding: "utf-8" }).trim();
+          if (originUrl) {
+            console.log(`📌 Terdeteksi repositori Git yang sudah ada: ${originUrl}`);
+            const repoNameMatch = originUrl.match(/[\/:]([^\/:]+?)(?:\.git)?$/);
+            if (repoNameMatch && !slug) {
+              const detectedRepoName = repoNameMatch[1];
+              const useName = await ask(rl, `Gunakan repositori "${detectedRepoName}" untuk update? (Y/n)`, "Y");
+              if (useName.toLowerCase() !== "n") {
+                if (!name) name = detectedRepoName;
+                slug = sanitizeSlug(detectedRepoName);
+                isUpdateMode = true;
+              }
+            }
+          }
+        } catch {}
+
         return resolved;
       }
 
@@ -1113,6 +1216,85 @@ PILIHAN ARGUMEN:
     const currentStr = stacks.length ? stacks.join(", ") : defaultStacks;
     const input = await ask(rl, "🛠 Tech Stack (pisahkan dengan koma)", currentStr);
     return input.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
+  // ==========================================================
+  // MODE SELECTION: BUAT BARU vs UPDATE REPO YANG SUDAH ADA
+  // ==========================================================
+  let isUpdateMode = !!flags.update;
+
+  if (!flags.name && !flags.slug && !flags.update) {
+    console.log(`Pilih Mode Otomasi:`);
+    console.log(`  1) 🆕 Buat Proyek Baru (Inisialisasi repo dari awal)`);
+    console.log(`  2) 🔄 Update Proyek / Repositori yang Sudah Ada (GitHub / Supabase / Folder lokal)`);
+    const modeChoice = await ask(rl, "Pilih mode (1/2)", "1");
+    if (modeChoice.trim() === "2") {
+      isUpdateMode = true;
+    }
+  }
+
+  if (isUpdateMode && !name) {
+    console.log(`\n🔍 Mode Update Proyek:`);
+    console.log(`  1) 🌐 Pilih dari Repositori GitHub Anda (@${GITHUB_USERNAME})`);
+    console.log(`  2) 🗄️ Pilih dari Database Portfolio (Supabase)`);
+    console.log(`  3) 📁 Pilih Folder Proyek Lokal (Auto-deteksi Git)`);
+    console.log(`  4) ✍️ Masukkan Nama / Slug Proyek Manual`);
+    const updateSrc = await ask(rl, "Pilih opsi (1-4)", "1");
+
+    if (updateSrc.trim() === "1") {
+      console.log(`⏳ Mengambil daftar repositori dari GitHub @${GITHUB_USERNAME}...`);
+      const ghRepos = await fetchRecentGithubRepos();
+      if (ghRepos.length > 0) {
+        console.log(`\n📂 Daftar Repositori GitHub (@${GITHUB_USERNAME}):`);
+        ghRepos.slice(0, 15).forEach((r: any, idx: number) => {
+          const desc = r.description ? ` - ${r.description.slice(0, 45)}...` : "";
+          console.log(`  ${idx + 1}) ${r.name}${desc}`);
+        });
+        const pick = await ask(rl, `Pilih nomor repositori (1-${Math.min(15, ghRepos.length)}) atau ketik nama repo`, "1");
+        const pickIdx = parseInt(pick.trim(), 10) - 1;
+        const selected =
+          !isNaN(pickIdx) && ghRepos[pickIdx]
+            ? ghRepos[pickIdx]
+            : ghRepos.find((r: any) => r.name.toLowerCase() === pick.trim().toLowerCase());
+        if (selected) {
+          name = selected.name;
+          slug = sanitizeSlug(selected.name);
+          descriptionHint = selected.description || "";
+          linkDemo = selected.homepage || "";
+          if (selected.topics && selected.topics.length) {
+            category = detectCategory({ topics: selected.topics, name: selected.name }) as any;
+          }
+          console.log(`✅ Repositori "${selected.name}" terpilih!`);
+        }
+      } else {
+        console.log(`⚠️ Tidak dapat mengambil repositori GitHub atau belum ada repo.`);
+      }
+    } else if (updateSrc.trim() === "2") {
+      console.log(`⏳ Mengambil daftar proyek dari Supabase...`);
+      const supaProjects = await fetchSupabaseProjects();
+      if (supaProjects.length > 0) {
+        console.log(`\n🗄️ Daftar Proyek Supabase:`);
+        supaProjects.slice(0, 15).forEach((p: any, idx: number) => {
+          console.log(`  ${idx + 1}) ${p.title || p.slug} [${(p.category || "web").toUpperCase()}]`);
+        });
+        const pick = await ask(rl, `Pilih nomor proyek (1-${Math.min(15, supaProjects.length)})`, "1");
+        const pickIdx = parseInt(pick.trim(), 10) - 1;
+        const selected = !isNaN(pickIdx) && supaProjects[pickIdx] ? supaProjects[pickIdx] : null;
+        if (selected) {
+          name = selected.title || selected.slug;
+          slug = selected.slug;
+          category = selected.category as any;
+          stacks = Array.isArray(selected.stacks) ? selected.stacks : [];
+          descriptionHint = selected.description || "";
+          linkDemo = selected.link_demo || "";
+          console.log(`✅ Proyek "${name}" terpilih dari Supabase!`);
+        }
+      } else {
+        console.log(`⚠️ Belum ada proyek di Supabase.`);
+      }
+    } else if (updateSrc.trim() === "3") {
+      projectPath = await promptProjectPath();
+    }
   }
 
   // Initial Wizard Collection
@@ -1517,38 +1699,85 @@ PILIHAN ARGUMEN:
       execSync("git init -b main", { cwd: projectPath, stdio: "ignore" });
     }
     execSync("git add .", { cwd: projectPath, stdio: "ignore" });
-    try {
-      execSync(`git commit -m "docs: generate professional documentation for ${name}"`, {
-        cwd: projectPath,
-        stdio: "ignore",
-      });
-    } catch {}
+    const gitStatus = execSync("git status --porcelain", { cwd: projectPath, encoding: "utf-8" }).trim();
+    if (gitStatus) {
+      try {
+        execSync(`git commit -m "docs: ${isUpdateMode ? "update" : "generate"} professional documentation for ${name}"`, {
+          cwd: projectPath,
+          stdio: "ignore",
+        });
+        console.log(`✅ Berhasil commit perubahan dokumentasi ke Git lokal.`);
+      } catch {}
+    } else {
+      console.log(`ℹ️ Tidak ada perubahan file baru untuk di-commit.`);
+    }
   } catch (err: any) {
     console.warn("⚠️ Catatan Git lokal:", err.message);
   }
 
   // ==========================================================
-  // STEP 4: CREATE AND PUSH TO GITHUB (Dengan Retry/Skip Loop)
+  // STEP 4: CREATE AND PUSH TO GITHUB (Dengan Retry/Skip Loop & Update Safe)
   // ==========================================================
   if (!flags.dryRun && !flags.skipGithub) {
     console.log(`🌐 4/7 Menghubungkan dan push ke GitHub...`);
     const topics = ["portfolio", category, ...stacks.slice(0, 5)];
-    await createGithubRepo(slug, description, false, topics);
+    await createOrUpdateGithubRepo(slug, description, false, topics, linkDemo);
 
     let pushSuccess = false;
     while (!pushSuccess) {
       try {
-        const remoteUrl = GITHUB_TOKEN
+        const isPortfolioRoot = path.resolve(projectPath) === portfolioRootDir;
+        const targetRemoteUrl = GITHUB_TOKEN
           ? `https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GITHUB_USERNAME}/${slug}.git`
           : `https://github.com/${GITHUB_USERNAME}/${slug}.git`;
 
-        try {
-          execSync(`git remote remove origin`, { cwd: projectPath, stdio: "ignore" });
-        } catch {}
+        if (isPortfolioRoot) {
+          console.log(`ℹ️ Berada di repositori portfolio utama. Melakukan push ke origin main...`);
+          execSync(`git push origin main`, { cwd: projectPath, stdio: "inherit" });
+        } else {
+          let currentOriginUrl = "";
+          try {
+            currentOriginUrl = execSync("git remote get-url origin", { cwd: projectPath, encoding: "utf-8" }).trim();
+          } catch {}
 
-        execSync(`git remote add origin ${remoteUrl}`, { cwd: projectPath, stdio: "ignore" });
-        execSync(`git branch -M main`, { cwd: projectPath, stdio: "ignore" });
-        execSync(`git push -u origin main --force`, { cwd: projectPath, stdio: "inherit" });
+          if (!currentOriginUrl) {
+            execSync(`git remote add origin ${targetRemoteUrl}`, { cwd: projectPath, stdio: "ignore" });
+          } else {
+            execSync(`git remote set-url origin ${targetRemoteUrl}`, { cwd: projectPath, stdio: "ignore" });
+          }
+
+          execSync(`git branch -M main`, { cwd: projectPath, stdio: "ignore" });
+
+          try {
+            execSync(`git push -u origin main`, { cwd: projectPath, stdio: "inherit" });
+          } catch (normalPushErr: any) {
+            console.warn(`\n⚠️ Push standar ditolak (mungkin ada commit baru di remote).`);
+            const retryPrompt = readline.createInterface({ input: process.stdin, output: process.stdout });
+            const fc = await ask(
+              retryPrompt,
+              "[P] Pull --rebase lalu push | [F] Force push (--force) | [S] Lewati push (P/f/s)",
+              "P"
+            );
+            retryPrompt.close();
+
+            const c = fc.trim().toLowerCase();
+            if (c === "f") {
+              execSync(`git push -u origin main --force`, { cwd: projectPath, stdio: "inherit" });
+            } else if (c === "p" || c === "") {
+              try {
+                execSync(`git pull --rebase origin main`, { cwd: projectPath, stdio: "inherit" });
+                execSync(`git push -u origin main`, { cwd: projectPath, stdio: "inherit" });
+              } catch (rebaseErr: any) {
+                console.warn(`⚠️ Rebase/pull belum berhasil: ${rebaseErr.message}`);
+                throw rebaseErr;
+              }
+            } else {
+              console.log("Melanjutkan proses tanpa push...");
+              break;
+            }
+          }
+        }
+
         console.log(`✅ Berhasil push ke GitHub: ${linkGithub}`);
         pushSuccess = true;
       } catch (err: any) {
@@ -1701,7 +1930,6 @@ PILIHAN ARGUMEN:
   }
 
   // Tulis MDX ke contents/projects/
-  const portfolioRootDir = path.resolve(__dirname, "..");
   const mdxDir = path.join(portfolioRootDir, "contents", "projects");
   if (fs.existsSync(mdxDir)) {
     const mdxFile = path.join(mdxDir, `${slug}.mdx`);
@@ -1711,11 +1939,20 @@ PILIHAN ARGUMEN:
 
     try {
       execSync(`git add contents/projects/${slug}.mdx`, { cwd: portfolioRootDir, stdio: "ignore" });
-      execSync(`git commit -m "feat(projects): add ${name} [${category}]"`, {
-        cwd: portfolioRootDir,
-        stdio: "ignore",
-      });
-      console.log(`🎉 Berhasil commit perubahan ke repositori portfolio!`);
+      const statusPorcelain = execSync("git status --porcelain", { cwd: portfolioRootDir, encoding: "utf-8" }).trim();
+      if (statusPorcelain) {
+        execSync(`git commit -m "feat(projects): ${isUpdateMode ? "update" : "add"} ${name} [${category}]"`, {
+          cwd: portfolioRootDir,
+          stdio: "ignore",
+        });
+        console.log(`🎉 Berhasil commit perubahan ke repositori portfolio!`);
+      }
+      if (path.resolve(projectPath) !== portfolioRootDir) {
+        try {
+          execSync(`git push origin main`, { cwd: portfolioRootDir, stdio: "ignore" });
+          console.log(`🚀 Berhasil push update MDX ke repositori portfolio online!`);
+        } catch {}
+      }
     } catch {}
   }
 

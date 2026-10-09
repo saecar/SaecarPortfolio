@@ -26,14 +26,14 @@ jobs:
       - name: Run sync-from-github
         env:
           GITHUB_READ_USER_TOKEN_PERSONAL: ${{ secrets.GITHUB_READ_USER_TOKEN_PERSONAL }}
-          GITHUB_USERNAME: satriabahari
+          GITHUB_USERNAME: saecar
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-1.5-flash
           PORTFOLIO_GITHUB_TOKEN: ${{ secrets.GITHUB_READ_USER_TOKEN_PERSONAL }}
-          PORTFOLIO_REPO: satriabahari/satriabahari.my.id
+          PORTFOLIO_REPO: saecar/SaecarPortfolio
         run: bun run scripts/sync-from-github.ts
 
       - name: Upload sync log

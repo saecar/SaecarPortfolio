@@ -10,9 +10,9 @@ import { detectCategory } from "../common/libs/detect-category";
 import { generateReadme } from "../common/libs/readme-template";
 import { buildSyncLog, persistSyncLog } from "../common/libs/sync-logger";
 
-const GITHUB_USERNAME = process.env.GITHUB_USERNAME || "satriabahari";
+const GITHUB_USERNAME = process.env.GITHUB_USERNAME || "saecar";
 const GITHUB_TOKEN = process.env.GITHUB_READ_USER_TOKEN_PERSONAL;
-const PORTFOLIO_REPO = process.env.PORTFOLIO_REPO || "satriabahari/satriabahari.my.id";
+const PORTFOLIO_REPO = process.env.PORTFOLIO_REPO || "saecar/SaecarPortfolio";
 const PORTFOLIO_GITHUB_TOKEN = process.env.PORTFOLIO_GITHUB_TOKEN || GITHUB_TOKEN;
 
 function sanitizeSlug(slug: string): string {
