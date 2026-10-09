@@ -1,0 +1,144 @@
+# portfolioo
+> portfolioo adalah platform web portfolio full-stack modern yang dirancang untuk menampilkan karya profesional, pengalaman, dan studi kasus secara interaktif dan elegan.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Category: Web](https://img.shields.io/badge/Category-Web-blue.svg)](https://github.com/saecar/portfolioo)
+[![React.js](https://img.shields.io/badge/React.js-18.x-61DAFB?logo=react&logoColor=white)](https://reactjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Vercel Deployment](https://img.shields.io/badge/Deploy-Vercel-black?logo=vercel&logoColor=white)](https://vercel.com/)
+[![Topics: Portfolio](https://img.shields.io/badge/Topic-Portfolio-informational)](https://github.com/topics/portfolio)
+
+---
+
+## 🌟 Fitur Utama
+
+- ⚡ **Performa Tinggi & Responsif:** Dibangun di atas fondasi modern yang menjamin kecepatan *load time* optimal serta tampilan yang adaptif di berbagai perangkat (Mobile, Tablet, Desktop).
+- 🎨 **Desain Modern & Kustomisasi Mudah:** Mengusung estetika minimalis dengan dukungan transisi mulus dan kemudahan penyesuaian tema menggunakan Tailwind CSS.
+- 📬 **Sistem Kontak Terintegrasi:** Dilengkapi formulir pesan langsung yang terhubung secara *real-time* ke database backend untuk memudahkan rekruter atau klien menghubungi Anda.
+- 📊 **Manajemen Konten Fleksibel:** Memungkinkan pembaruan daftar proyek, riwayat kerja, dan keahlian secara dinamis tanpa perlu mengubah kode sumber utama.
+
+---
+
+## 🛠 Tech Stack & Komponen
+
+Arsitektur aplikasi web ini dirancang dengan pendekatan *modern full-stack* untuk memastikan skalabilitas dan kemudahan pemeliharaan:
+
+- **Frontend:** 
+  - [React.js](https://reactjs.org/) (Library UI berbasis komponen)
+  - [Tailwind CSS](https://tailwindcss.com/) (Utility-first CSS framework untuk styling)
+  - [Lucide Icons](https://lucide.dev/) / React Icons (Koleksi ikon modern)
+- **Backend & Database:** 
+  - [Supabase](https://supabase.com/) / [Railway](https://railway.app/) (Backend-as-a-Service untuk manajemen database PostgreSQL dan autentikasi)
+- **Deployment & CI/CD:** 
+  - [Vercel](https://vercel.com/) (Hosting frontend berperforma tinggi dengan integrasi Git otomatis)
+
+---
+
+## 🚀 Cara Pemasangan & Persiapan
+
+Ikuti langkah-langkah di bawah ini secara berurutan untuk menjalankan proyek `portfolioo` di lingkungan lokal Anda.
+
+### Prasyarat
+Pastikan komputer Anda telah menginstal perangkat lunak berikut:
+- [Node.js](https://nodejs.org/) (Versi 18.x atau terbaru)
+- [Git](https://git-scm.com/)
+- [Bun](https://bun.sh/) (Disarankan) atau npm/yarn sebagai package manager.
+
+### Langkah Instalasi
+
+1. **Clone Repository**
+   Buka terminal Anda dan jalankan perintah berikut untuk mengunduh kode sumber:
+   ```bash
+   git clone https://github.com/saecar/portfolioo.git
+   cd portfolioo
+   ```
+
+2. **Instalasi Dependensi**
+   Gunakan Bun (atau npm) untuk menginstal seluruh modul yang dibutuhkan:
+   ```bash
+   bun install
+   # atau jika menggunakan npm
+   # npm install
+   ```
+
+3. **Konfigurasi Environment Variables**
+   Salin file templat environment ke file `.env` baru:
+   ```bash
+   cp .env.example .env
+   ```
+   Buka file `.env` menggunakan teks editor pilihan Anda (seperti VS Code), lalu sesuaikan variabel konfigurasi berikut dengan kredensial Anda (misalnya kunci API Supabase):
+   ```env
+   VITE_SUPABASE_URL=your_supabase_project_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+4. **Menjalankan Server Pengembangan (Development Server)**
+   Mulai aplikasi dalam mode *development*:
+   ```bash
+   bun dev
+   # atau
+   # npm run dev
+   ```
+   Aplikasi kini dapat diakses melalui browser pada alamat `http://localhost:5173`.
+
+5. **Membangun untuk Produksi (Production Build)**
+   Untuk menguji proses *build* aplikasi sebelum melakukan deployment:
+   ```bash
+   bun run build
+   # atau
+   # npm run build
+   ```
+
+---
+
+## 🚢 Panduan Deployment Otomatis
+
+Proyek ini dirancang agar dapat dideploy dengan mudah ke platform **Vercel** dan diintegrasikan dengan **Supabase**:
+
+1. **Deployment ke Vercel:**
+   - Masuk ke dashboard [Vercel](https://vercel.com/).
+   - Klik **Add New...** -> **Project**, lalu impor repository `saecar/portfolioo`.
+   - Pada bagian **Environment Variables**, masukkan variabel yang sama seperti pada file `.env` lokal Anda (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, dll).
+   - Klik **Deploy**. Vercel secara otomatis akan mendeteksi pengaturan build dan mempublikasikan situs web Anda.
+
+2. **Integrasi Supabase / Railway:**
+   - Buat proyek baru di [Supabase](https://supabase.com/).
+   - Jalankan skema SQL migrasi untuk tabel yang dibutuhkan (seperti tabel `messages` atau `projects`).
+   - Ambil URL proyek dan anon/public key, lalu pasang pada pengaturan Environment Variables di Vercel.
+
+---
+
+## 📂 Struktur Folder
+
+Berikut adalah gambaran besar struktur direktori dari proyek `portfolioo`:
+
+```text
+portfolioo/
+├── public/                # Aset statis (favicon, gambar, font)
+├── src/
+│   ├── assets/            # Gambar dan gaya global tambahan
+│   ├── components/        # Komponen UI modular (Navbar, Footer, ProjectCard, dll)
+│   ├── hooks/             # Custom React Hooks
+│   ├── lib/               # Konfigurasi pihak ketiga (Supabase client, dll)
+│   ├── pages/             # Halaman utama aplikasi (Home, About, Projects, Contact)
+│   ├── App.jsx            # Komponen root aplikasi
+│   └── main.jsx           # Titik masuk utama (Entry point)
+├── .env.example           # Templat variabel lingkungan
+├── .gitignore             # Berkas yang diabaikan oleh Git
+├── package.json           # Daftar dependensi dan skrip proyek
+├── tailwind.config.js     # Konfigurasi kustom Tailwind CSS
+└── README.md              # Dokumentasi proyek
+```
+
+---
+
+## 🤝 Kontribusi & Lisensi
+
+Kontribusi, saran, dan laporan *bug* sangat disambut baik! Jika Anda ingin berkontribusi:
+1. Fork repository ini.
+2. Buat branch fitur baru (`git checkout -b fitur/NamaFitur`).
+3. Commit perubahan Anda (`git commit -m 'Menambahkan Fitur X'`).
+4. Push ke branch tersebut (`git push origin fitur/NamaFitur`).
+5. Buat sebuah Pull Request.
+
+Proyek ini dilisensikan di bawah [MIT License](https://opensource.org/licenses/MIT).
