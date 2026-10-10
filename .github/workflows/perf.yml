@@ -1,0 +1,29 @@
+name: Performance & Bundle CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bundle-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install Dependencies
+        run: bun install
+      - name: Build Next.js
+        run: bun run build
+      - name: Bundle Size Check
+        run: |
+          BUNDLE_LIMIT=200000
+          ACTUAL=$(gzip -c .next/static/chunks/*.js | wc -c)
+          echo "Current gzip bundle: $ACTUAL bytes (limit: $BUNDLE_LIMIT bytes)"
+          if [ $ACTUAL -gt $BUNDLE_LIMIT ]; then
+            echo "Bundle too large: $ACTUAL bytes exceeds limit of $BUNDLE_LIMIT bytes"
+            exit 1
+          fi

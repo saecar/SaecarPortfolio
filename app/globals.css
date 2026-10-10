@@ -29,3 +29,28 @@
     clip-path: polygon(0 25%, 50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%);
   }
 }
+
+/* Zero-overhead hardware-accelerated fade-up animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-aos="fade-up"] {
+  animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Native scroll-driven animation support */
+@supports (animation-timeline: scroll()) {
+  .scroll-stack-card {
+    animation: stack linear;
+    animation-timeline: scroll(container);
+  }
+}
+

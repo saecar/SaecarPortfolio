@@ -1,6 +1,10 @@
 import createNextIntlPlugin from "next-intl/plugin";
+import bundleAnalyzer from "@next/bundle-analyzer";
 
 const withNextIntl = createNextIntlPlugin();
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -11,7 +15,6 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: [
       "react-icons",
-      "@tabler/icons-react",
       "framer-motion",
       "date-fns",
       "clsx",
@@ -32,6 +35,15 @@ const nextConfig = {
   },
   headers: async () => [
     {
+      source: "/:path*",
+      headers: [
+        {
+          key: "Permissions-Policy",
+          value: "interest-cohort=()",
+        },
+      ],
+    },
+    {
       source: "/:all*(svg|jpg|jpeg|png|webp|avif|ico|woff|woff2)",
       headers: [
         {
@@ -43,4 +55,4 @@ const nextConfig = {
   ],
 };
 
-export default withNextIntl(nextConfig);
+export default withBundleAnalyzer(withNextIntl(nextConfig));

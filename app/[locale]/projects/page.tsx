@@ -9,6 +9,7 @@ import { METADATA } from "@/common/constants/metadata";
 import { getProjectsData } from "@/services/projects";
 
 export const revalidate = 3600;
+export const dynamic = "force-static";
 
 interface ProjectsPageProps {
   params: { locale: string };

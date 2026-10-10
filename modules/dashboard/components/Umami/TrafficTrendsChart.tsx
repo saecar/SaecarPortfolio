@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Bar } from "react-chartjs-2";
+import dynamic from "next/dynamic";
 import { format, parseISO } from "date-fns";
 
 import {
@@ -23,6 +23,13 @@ ChartJS.register(
   Tooltip,
   Legend,
 );
+
+const Bar = dynamic(() => import("react-chartjs-2").then((m) => m.Bar), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[350px] w-full animate-pulse rounded-lg bg-neutral-100 dark:bg-neutral-800/50" />
+  ),
+});
 
 interface DataPoint {
   x: string;

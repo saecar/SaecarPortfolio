@@ -1,58 +1,45 @@
-import styled from '@emotion/styled'
-import clsx from 'clsx'
+import clsx from "clsx";
 
 interface MobileMenuButtonProps {
-  expandMenu: boolean
-  setExpandMenu: (expand: boolean) => void
+  expandMenu: boolean;
+  setExpandMenu: (expand: boolean) => void;
 }
 
-const MobileMenuButton = ({ expandMenu, setExpandMenu }: MobileMenuButtonProps) => {
+const MobileMenuButton = ({
+  expandMenu,
+  setExpandMenu,
+}: MobileMenuButtonProps) => {
   const handleMenuToggle = () => {
-    setExpandMenu(!expandMenu)
-  }
-
-  const menuSpanData = [{ index: 1 }, { index: 2 }, { index: 3 }]
+    setExpandMenu(!expandMenu);
+  };
 
   return (
-    <StyledMenu className="flex lg:hidden" onClick={handleMenuToggle}>
-      {menuSpanData.map(item => (
-        <StyledMenuSpan
-          key={item.index}
-          className={clsx('bg-neutral-950 dark:bg-neutral-100 ', expandMenu && 'active')}
-        />
-      ))}
-    </StyledMenu>
-  )
-}
+    <button
+      type="button"
+      aria-label="Toggle Mobile Menu"
+      className="flex h-[21px] w-[26px] cursor-pointer flex-col justify-between lg:hidden"
+      onClick={handleMenuToggle}
+    >
+      <span
+        className={clsx(
+          "h-[3px] w-full rounded-full bg-neutral-950 transition-all duration-300 dark:bg-neutral-100",
+          expandMenu && "origin-left rotate-45",
+        )}
+      />
+      <span
+        className={clsx(
+          "h-[3px] w-full rounded-full bg-neutral-950 transition-all duration-300 dark:bg-neutral-100",
+          expandMenu && "w-0 opacity-0",
+        )}
+      />
+      <span
+        className={clsx(
+          "h-[3px] w-full rounded-full bg-neutral-950 transition-all duration-300 dark:bg-neutral-100",
+          expandMenu && "origin-left -rotate-45",
+        )}
+      />
+    </button>
+  );
+};
 
-export default MobileMenuButton
-
-const StyledMenu = styled.div`
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 21px;
-  width: 26px;
-  cursor: pointer;
-`
-
-const StyledMenuSpan = styled.span`
-  width: 100%;
-  height: 3px;
-  transition: all 0.5s ease;
-  border-radius: 10px;
-
-  &.active:nth-of-type(1),
-  &.active:nth-of-type(3) {
-    transform-origin: left;
-  }
-  &.active:nth-of-type(1) {
-    transform: rotate(45deg);
-  }
-  &.active:nth-of-type(2) {
-    width: 0;
-  }
-  &.active:nth-of-type(3) {
-    transform: rotate(-45deg);
-  }
-`
+export default MobileMenuButton;

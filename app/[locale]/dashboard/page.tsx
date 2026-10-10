@@ -1,5 +1,7 @@
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import DashboardSkeleton from "@/common/components/elements/DashboardSkeleton";
 import Container from "@/common/components/elements/Container";
 import PageHeading from "@/common/components/elements/PageHeading";
 import Dashboard from "@/modules/dashboard/components/Dashboard";
@@ -23,7 +25,9 @@ const DashboardPage = async ({ params: { locale } }: Props) => {
   return (
     <Container data-aos="fade-up">
       <PageHeading title={t("title")} description={t("description")} />
-      <Dashboard />
+      <Suspense fallback={<DashboardSkeleton />}>
+        <Dashboard />
+      </Suspense>
     </Container>
   );
 };

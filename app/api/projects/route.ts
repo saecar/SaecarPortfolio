@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { getProjectsData } from "@/services/projects";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const GET = async () => {
   try {
     const data = await getProjectsData();
 
-    return NextResponse.json(data, { status: 200 });
+    return NextResponse.json(data, {
+      status: 200,
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+      },
+    });
   } catch (error: any) {
     console.error("Project API Error:", error.message);
     return NextResponse.json(

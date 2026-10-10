@@ -1,13 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import AOS from "aos";
-import "aos/dist/aos.css";
-import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 import ChatButton from "../../../modules/chat/components/ChatButton";
-
 import Sidebar from "./sidebar";
 
 const Notif = dynamic(() => import("../elements/Notif"), { ssr: false });
@@ -20,14 +16,6 @@ const Layouts = ({ children }: LayoutsProps) => {
   const pathname = usePathname();
 
   const isShowChatButton = pathname !== "/chat";
-
-  useEffect(() => {
-    AOS.init({
-      duration: 800,
-      delay: 50,
-      once: true,
-    });
-  }, []);
   return (
     <div className="mx-auto max-w-7xl lg:px-12">
       <div className="mx-auto flex flex-col lg:flex-row lg:gap-5 lg:py-4">

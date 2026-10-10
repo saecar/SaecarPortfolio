@@ -71,6 +71,10 @@ const ProjectCard = ({
             alt={title}
             width={450}
             height={200}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority={false}
+            placeholder="blur"
+            blurDataURL="data:image/webp;base64,UklGRmIAAABXRUJQVlA4IFYAAAAwAQCdASoUAAoAPm0ukUekI6IhMAgAsBIJaQAAX+UAAAD+8fn3//+///9/8AAAAA=="
             className="h-[200px] w-full rounded-t-xl object-cover"
           />
           <div className="absolute left-0 top-0 flex h-full w-full items-center justify-center gap-1 rounded-t-xl bg-black text-sm font-medium text-neutral-50 opacity-0 transition-opacity duration-300 group-hover:opacity-80">

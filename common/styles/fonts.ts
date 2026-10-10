@@ -4,6 +4,8 @@ export const inter = Inter({
   variable: "--inter-font",
   subsets: ["latin"],
   display: "swap",
-  weight: ["300", "400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
+  fallback: ["system-ui", "sans-serif"],
   preload: true,
 });
+

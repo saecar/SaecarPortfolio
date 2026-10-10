@@ -29,6 +29,9 @@ const ProfileHeader = ({ expandMenu, imageSize }: ProfileHeaderProps) => {
         className="border-2 border-neutral-400 dark:border-neutral-600 lg:hover:scale-105"
         rounded="rounded-full"
         priority
+        quality={90}
+        placeholder="blur"
+        blurDataURL="data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAABQAwCdASoUAAoAPzmEuVOvKKWisAgB4CcJZgCdMoACWgIAgADJJAO1Xh0vCgN2XmKml08nvbvV9Cc+rMqrUXU03v5ibBNM0NRsKub2QAA="
       />
 
       <div className="mt-1 flex items-center gap-2 lg:mt-4">
