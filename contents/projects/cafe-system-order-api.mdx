@@ -1,45 +1,79 @@
 # cafe-system-order-api
 
-> Sistem manajemen pesanan kafe berbasis RESTful API yang handal dan skalabel untuk mengotomatisasi alur transaksi, inventaris, dan pembayaran digital.
+> Sistem manajemen pesanan kafe berbasis RESTful API yang handal dan skalabel untuk mengotomatisasi alur transaksi, inventaris, dan integrasi pembayaran digital.
 
 <p align="center">
-  <a href="https://github.com/saecar/cafe-system-order-api/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License MIT" /></a>
-  <a href="https://github.com/saecar/cafe-system-order-api"><img src="https://img.shields.io/badge/Category-Web-orange.svg" alt="Category Web" /></a>
-  <a href="https://github.com/saecar/cafe-system-order-api"><img src="https://img.shields.io/badge/Tech-Laravel%20%7C%20PHP%20%7C%20Midtrans-red.svg" alt="Tech Stack" /></a>
-  <a href="https://github.com/saecar/cafe-system-order-api/topics/restapi"><img src="https://img.shields.io/badge/API-RESTful-success.svg" alt="REST API" /></a>
-</p>
-
-<p align="center">
-  <a href="#-fitur-utama">Fitur Utama</a> •
-  <a href="#-tech-stack--komponen">Tech Stack</a> •
-  <a href="#-cara-pemasangan--persiapan">Instalasi</a> •
-  <a href="#-struktur-folder">Struktur Folder</a> •
-  <a href="#-kontribusi--lisensi">Lisensi</a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://github.com/saecar/cafe-system-order-api"><img src="https://img.shields.io/badge/category-web-blue.svg" alt="Category Web" /></a>
+  <a href="https://php.net"><img src="https://img.shields.io/badge/PHP-8.2%25+-777BB4.svg?logo=php&logoColor=white" alt="PHP" /></a>
+  <a href="https://laravel.com"><img src="https://img.shields.io/badge/Laravel-11.x-FF2D20.svg?logo=laravel&logoColor=white" alt="Laravel" /></a>
+  <a href="https://midtrans.com"><img src="https://img.shields.io/badge/Midtrans-Payment-005OEB.svg" alt="Midtrans" /></a>
+  <a href="https://github.com/saecar/cafe-system-order-api/issues"><img src="https://img.shields.io/github/issues/saecar/cafe-system-order-api" alt="Issues" /></a>
 </p>
 
 ---
 
 ## 🌟 Fitur Utama
 
-- 🧾 **Manajemen Pesanan Real-time**: Pencatatan dan pemantauan status pesanan dari pelanggan secara *live* mulai dari *pending*, *processing*, hingga *completed*.
-- 💳 **Integrasi Payment Gateway (Midtrans)**: Otomatisasi transaksi pembayaran digital menggunakan QRIS, *Virtual Account*, dan *e-wallet* dengan webhook handler yang aman.
-- 📦 **Manajemen Menu & Inventaris**: Pengelolaan kategori produk, ketersediaan stok, harga, dan variasi menu kafe secara dinamis.
-- 📊 **Laporan & Analitik Penjualan**: Rekapitulasi data transaksi harian, bulanan, dan produk terlaris untuk kebutuhan bisnis.
-- 🔒 **Autentikasi & Otorisasi Berbasis Peran (RBAC)**: Keamanan tingkat lanjut menggunakan Laravel Sanctum untuk membedakan hak akses antara Admin, Kasir, dan Pelanggan.
+- 🛒 **Manajemen Pesanan Real-Time**: Alur pemesanan end-to-end dari pelanggan, dapur (kitchen display), hingga status siap saji.
+- 💳 **Integrasi Payment Gateway**: Otomatisasi transaksi menggunakan Midtrans (QRIS, Virtual Account, E-Wallet, Kartu Kredit).
+- 🔐 **Autentikasi Berbasis Token**: Keamanan endpoint API menggunakan Laravel Sanctum untuk otorisasi Multi-Role (Admin, Kasir, Dapur, Pelanggan).
+- 📊 **Laporan & Analitik Keuangan**: Rekapitulasi data penjualan harian, mingguan, dan bulanan secara akurat untuk kebutuhan bisnis.
 
 ---
 
 ## 🛠 Tech Stack & Komponen
 
-Proyek ini dibangun menggunakan arsitektur web modern yang memisahkan antara layanan Backend API dan pengelolaan basis data relasional yang optimal.
+Proyek ini dibangun menggunakan arsitektur modern standar Industri Web Development:
 
-### Arsitektur Web
-- **Backend**: Laravel (PHP Framework) sebagai core RESTful API yang menangani business logic, routing, dan middleware.
-- **Database**: MySQL / PostgreSQL untuk penyimpanan data transaksional yang konsisten dan relasional.
-- **Authentication**: Laravel Sanctum (Token-based API Authentication).
-- **Payment Gateway**: Midtrans Core API / Snap Integration.
+- **Arsitektur Web**: RESTful API Backend
+- **Backend Core**: PHP 8.2+, Laravel 11 Framework
+- **Database & Storage**: MySQL / PostgreSQL dengan Eloquent ORM
+- **Authentication**: Laravel Sanctum (Token-based Auth)
+- **Payment Gateway**: Midtrans PHP SDK
+- **Deployment & Hosting**: Railway / Vercel (Serverless/Containerized)
 
-### Environment Variables (`.env.example`)
+---
+
+## 🚀 Cara Pemasangan & Persiapan
+
+Ikuti langkah-langkah di bawah ini untuk menyiapkan lingkungan pengembangan lokal Anda.
+
+### Prasyarat
+Pastikan komputer Anda telah menginstal:
+- PHP >= 8.2
+- Composer
+- Node.js & NPM / Bun
+- Git
+- MySQL / PostgreSQL
+
+### 1. Kloning Repositori
+Buka terminal Anda dan jalankan perintah berikut:
+```bash
+git clone https://github.com/saecar/cafe-system-order-api.git
+cd cafe-system-order-api
+```
+
+### 2. Instalasi Dependensi PHP & JavaScript
+```bash
+composer install
+npm install
+# atau jika menggunakan bun
+bun install
+```
+
+### 3. Konfigurasi Environment Variables (`.env`)
+Salin file `.env.example` menjadi `.env` lalu sesuaikan konfigurasi database dan kunci API Anda:
+```bash
+cp .env.example .env
+```
+
+Generate kunci aplikasi Laravel:
+```bash
+php artisan key:generate
+```
+
+Sesuaikan konfigurasi berikut pada file `.env` Anda:
 ```env
 APP_NAME="Cafe System Order API"
 APP_ENV=local
@@ -47,73 +81,28 @@ APP_KEY=
 APP_DEBUG=true
 APP_URL=http://localhost:8000
 
-LOG_CHANNEL=stack
-LOG_DEPRECATIONS_CHANNEL=null
-LOG_LEVEL=debug
-
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=cafe_order_db
+DB_DATABASE=cafe_system_db
 DB_USERNAME=root
 DB_PASSWORD=
 
-BROADCAST_DRIVER=log
-CACHE_DRIVER=file
-FILESYSTEM_DISK=public
-QUEUE_CONNECTION=sync
-SESSION_DRIVER=file
-SESSION_LIFETIME=120
-
-MIDTRANS_SERVER_KEY=your-server-key-here
-MIDTRANS_CLIENT_KEY=your-client-key-here
+# Konfigurasi Midtrans
+MIDTRANS_MERCHANT_ID=your_merchant_id
+MIDTRANS_CLIENT_KEY=your_client_key
+MIDTRANS_SERVER_KEY=your_server_key
 MIDTRANS_IS_PRODUCTION=false
 ```
 
----
-
-## 🚀 Cara pemasangan & Persiapan
-
-Ikuti langkah-langkah di bawah ini untuk menyiapkan lingkungan pengembangan lokal Anda:
-
-### 1. Prasyarat Sistem
-Pastikan komputer Anda telah menginstal perangkat lunak berikut:
-- PHP >= 8.2
-- Composer
-- Node.js & NPM / Bun
-- Git
-- MySQL / PostgreSQL
-
-### 2. Kloning Repositori
-Buka terminal Anda dan jalankan perintah berikut:
-```bash
-git clone https://github.com/saecar/cafe-system-order-api.git
-cd cafe-system-order-api
-```
-
-### 3. Instalasi Dependensi Backend (PHP/Composer)
-```bash
-composer install
-```
-
-### 4. Konfigurasi Lingkungan (`.env`)
-Salin file `.env.example` menjadi `.env` lalu sesuaikan konfigurasi database dan kunci API Anda:
-```bash
-cp .env.example .env
-```
-Generate kunci enkripsi aplikasi Laravel:
-```bash
-php artisan key:generate
-```
-
-### 5. Migrasi dan Seeder Database
-Pastikan layanan database Anda sudah aktif, lalu jalankan migrasi tabel beserta data dummy (opsional):
+### 4. Migrasi & Seeder Database
+Jalankan migrasi database beserta data dummy (seeder) untuk pengujian:
 ```bash
 php artisan migrate --seed
 ```
 
-### 6. Menjalankan Server Pengembangan Lokal
-Jalankan server lokal menggunakan artisan:
+### 5. Menjalankan Server Pengembangan
+Jalankan server lokal Laravel:
 ```bash
 php artisan serve
 ```
@@ -123,38 +112,48 @@ Aplikasi API kini dapat diakses melalui `http://localhost:8000`.
 
 ## 📂 Struktur Folder
 
-Berikut adalah peta arsitektur direktori proyek `cafe-system-order-api`:
-
 ```text
 cafe-system-order-api/
 ├── app/
 │   ├── Http/
-│   │   ├── Controllers/   # Logika endpoint API (Auth, Order, Menu, Payment)
-│   │   ├── Middleware/    # Filter request & otorisasi RBAC
-│   │   └── Requests/      # Validasi input data masuk
-│   ├── Models/            # Representasi entitas Eloquent ORM
-│   └── Services/          # Integrasi layanan pihak ketiga (Midtrans)
+│   │   ├── Controllers/
+│   │   │   ├── Api/v1/       # Endpoint API (Auth, Order, Menu, Payment)
+│   │   │   └── Controller.php
+│   │   └── Middleware/         # Custom Middleware (Role, Sanctum)
+│   ├── Models/                 # Eloquent Models (User, Order, MenuItem, Transaction)
+│   └── Services/               # Business Logic & Midtrans Service
+├── bootstrap/                  # Konfigurasi Bootstrapping Framework
+├── config/                     # Berkas Konfigurasi (database, services, sanctum)
 ├── database/
-│   ├── migrations/        # Skema struktur database relasional
-│   └── seeders/           # Data awal/dummy untuk pengujian
+│   ├── migrations/             # Skema Tabel Database
+│   └── seeders/                # Data Dummy Awal
 ├── routes/
-│   └── api.php            # Definisi endpoint RESTful API publik & privat
-├── storage/               # Berkas log, unggahan, dan cache lokal
-├── tests/                 # Unit & Feature testing (PHPUnit)
-├── .env.example           # Template konfigurasi environment
-├── composer.json          # Manajer dependensi PHP
-└── README.md              # Dokumentasi resmi proyek
+│   ├── api.php                 # Definisi Endpoint REST API
+│   └── web.php                 # Route Web Pendukung
+├── .env.example                # Template Environment Variables
+├── composer.json               # Dependensi PHP
+└── README.md                   # Dokumentasi Proyek
 ```
+
+---
+
+## 🌐 Panduan Deployment
+
+### Deploy Otomatis ke Railway / Vercel
+Proyek ini dirancang agar mudah di-deploy ke platform Cloud seperti Railway atau Vercel:
+
+1. **Hubungkan Repositori**: Buat proyek baru di [Railway](https://railway.app/) atau [Vercel](https://vercel.com/) dan hubungkan dengan repositori GitHub `saecar/cafe-system-order-api`.
+2. **Atur Environment Variables**: Masukkan seluruh variabel `.env` (terutama konfigurasi database dan Midtrans Server Key) ke dalam menu *Environment Variables* di dashboard Railway/Vercel.
+3. **Build & Start Command**:
+   - Build Command: `composer install --optimize-autoloader --no-dev`
+   - Start Command: `php artisan config:cache && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT`
+4. **Deploy**: Klik tombol *Deploy* dan tunggu hingga proses build selesai. API Anda kini siap digunakan secara publik.
 
 ---
 
 ## 🤝 Kontribusi & Lisensi
 
-Kontribusi, isu (*issues*), dan *pull requests* sangat diterima! 
-1. Fork repositori ini.
-2. Buat branch fitur baru (`git checkout -b feature/FiturBaru`).
-3. Commit perubahan Anda (`git commit -m 'Menambahkan FiturBaru'`).
-4. Push ke branch tersebut (`git push origin feature/FiturBaru`).
-5. Buat *Pull Request* baru.
+Kontribusi, isu (issues), dan *pull requests* sangat diterima dengan senang hati! 
+Silakan buka *issue* terlebih dahulu untuk mendiskusikan perubahan besar yang ingin Anda lakukan.
 
-Proyek ini dilisensikan di bawah [MIT License](https://github.com/saecar/cafe-system-order-api/blob/main/LICENSE).
+Proyek ini dilisensikan di bawah [MIT License](https://opensource.org/licenses/MIT).
