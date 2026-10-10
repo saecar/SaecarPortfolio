@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { HiOutlineArrowSmRight as ViewIcon } from "react-icons/hi";
 import { useTranslations } from "next-intl";
@@ -25,7 +27,14 @@ const getCategoryBadge = (cat?: string) => {
   }
   if (lower.startsWith("web")) {
     return {
-      label: lower === "web-frontend" ? "Frontend" : lower === "web-backend" ? "Backend" : lower === "web-fullstack" ? "Fullstack" : "Web",
+      label:
+        lower === "web-frontend"
+          ? "Frontend"
+          : lower === "web-backend"
+          ? "Backend"
+          : lower === "web-fullstack"
+          ? "Fullstack"
+          : "Web",
       className: "bg-sky-500/90 text-neutral-950 font-bold border-sky-400/50",
     };
   }
@@ -49,46 +58,61 @@ const ProjectCard = ({
 
   const safeDescription = description || "";
   const trimmedContent =
-    safeDescription.slice(0, 85) + (safeDescription.length > 85 ? "..." : "");
+    safeDescription.slice(0, 90) + (safeDescription.length > 90 ? "..." : "");
 
   return (
-    <Link href={`/projects/${slug}`}>
-      <SpotlightCard className="group relative cursor-pointer">
+    <Link href={`/projects/${slug}`} className="block h-full">
+      <SpotlightCard className="group relative flex h-full flex-col overflow-hidden rounded-2xl cursor-pointer">
+        {/* Category Badge - Top Left */}
         {catBadge && (
-          <div className={`absolute left-3 top-3 z-10 rounded-md px-2 py-0.5 text-[11px] uppercase tracking-wider shadow-sm border ${catBadge.className}`}>
+          <div
+            className={`absolute left-3 top-3 z-10 rounded-md px-2 py-0.5 text-[11px] uppercase tracking-wider shadow-sm border ${catBadge.className}`}
+          >
             {catBadge.label}
           </div>
         )}
+
+        {/* Featured Badge - Top Right */}
         {is_featured && (
-          <div className="absolute right-0 top-0 z-10 flex items-center gap-x-1 rounded-bl-lg rounded-tr-lg bg-primary px-2 py-1 text-sm font-medium text-neutral-900">
-            <PinIcon size={15} />
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-x-1 rounded-md bg-amber-400 px-2 py-0.5 text-xs font-semibold text-neutral-900 shadow-sm">
+            <PinIcon size={14} />
             <span>Featured</span>
           </div>
         )}
-        <div className="relative">
+
+        {/* Fixed 16:9 Image Container with Fallback & Hover Backdrop-Blur */}
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-neutral-100 dark:bg-neutral-800">
           <Image
             src={image || "/images/placeholder.webp"}
             alt={title}
-            width={450}
-            height={200}
+            width={480}
+            height={270}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             priority={false}
             placeholder="blur"
             blurDataURL="data:image/webp;base64,UklGRmIAAABXRUJQVlA4IFYAAAAwAQCdASoUAAoAPm0ukUekI6IhMAgAsBIJaQAAX+UAAAD+8fn3//+///9/8AAAAA=="
-            className="h-[200px] w-full rounded-t-xl object-cover"
+            fallbackText={title}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
-          <div className="absolute left-0 top-0 flex h-full w-full items-center justify-center gap-1 rounded-t-xl bg-black text-sm font-medium text-neutral-50 opacity-0 transition-opacity duration-300 group-hover:opacity-80">
+          {/* Overlay View Project */}
+          <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/60 backdrop-blur-sm text-sm font-medium text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <span>{t("view_project")}</span>
             <ViewIcon size={20} />
           </div>
         </div>
-        <div className="space-y-2 p-5">
-          <h3 className="cursor-pointer text-neutral-700 transition-all duration-300 group-hover:text-primary dark:text-neutral-300">
-            {title}
-          </h3>
-          <p className="text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-            {trimmedContent}
-          </p>
+
+        {/* Card Body */}
+        <div className="flex flex-1 flex-col justify-between space-y-3 p-4 sm:p-5">
+          <div className="space-y-1.5">
+            <h3 className="line-clamp-1 font-semibold text-neutral-900 transition-colors duration-200 group-hover:text-amber-500 dark:text-neutral-100 dark:group-hover:text-amber-400">
+              {title}
+            </h3>
+            <p className="line-clamp-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+              {trimmedContent}
+            </p>
+          </div>
+
+          {/* Stacks Badges */}
           <div className="flex flex-wrap items-center gap-2 pt-2">
             {(stacks || []).slice(0, 6).map((stack: string, index: number) => {
               const stackData = STACKS[stack];

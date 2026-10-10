@@ -33,6 +33,24 @@ const config: Config = {
         neutral: {
           DEFAULT: "#d4d4d4",
         },
+        success: {
+          DEFAULT: "#10b981",
+          subtle: "rgba(16, 185, 129, 0.15)",
+        },
+        warning: {
+          DEFAULT: "#f59e0b",
+          subtle: "rgba(245, 158, 11, 0.15)",
+        },
+        error: {
+          DEFAULT: "#ef4444",
+          subtle: "rgba(239, 68, 68, 0.15)",
+        },
+        surface: {
+          light: "#ffffff",
+          dark: "#171717",
+          subtleLight: "#f5f5f5",
+          subtleDark: "#262626",
+        },
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
@@ -49,29 +67,6 @@ const config: Config = {
           "50%": { backgroundPosition: "100% 50%" },
           "100%": { backgroundPosition: "0% 50%" },
         },
-        glitch: {
-          "0%": { "clip-path": "inset(20% 0 50% 0)" },
-          "5%": { "clip-path": "inset(10% 0 60% 0)" },
-          "10%": { "clip-path": "inset(15% 0 55% 0)" },
-          "15%": { "clip-path": "inset(25% 0 35% 0)" },
-          "20%": { "clip-path": "inset(30% 0 40% 0)" },
-          "25%": { "clip-path": "inset(40% 0 20% 0)" },
-          "30%": { "clip-path": "inset(10% 0 60% 0)" },
-          "35%": { "clip-path": "inset(15% 0 55% 0)" },
-          "40%": { "clip-path": "inset(25% 0 35% 0)" },
-          "45%": { "clip-path": "inset(30% 0 40% 0)" },
-          "50%": { "clip-path": "inset(20% 0 50% 0)" },
-          "55%": { "clip-path": "inset(10% 0 60% 0)" },
-          "60%": { "clip-path": "inset(15% 0 55% 0)" },
-          "65%": { "clip-path": "inset(25% 0 35% 0)" },
-          "70%": { "clip-path": "inset(30% 0 40% 0)" },
-          "75%": { "clip-path": "inset(40% 0 20% 0)" },
-          "80%": { "clip-path": "inset(20% 0 50% 0)" },
-          "85%": { "clip-path": "inset(10% 0 60% 0)" },
-          "90%": { "clip-path": "inset(15% 0 55% 0)" },
-          "95%": { "clip-path": "inset(25% 0 35% 0)" },
-          "100%": { "clip-path": "inset(30% 0 40% 0)" },
-        },
         "star-movement-bottom": {
           "0%": { transform: "translate(0%, 0%)", opacity: "1" },
           "100%": { transform: "translate(-100%, 0%)", opacity: "0" },
@@ -84,10 +79,6 @@ const config: Config = {
       animation: {
         shine: "shine 5s linear infinite",
         gradient: "gradient 8s linear infinite",
-        "glitch-after":
-          "glitch var(--after-duration) infinite linear alternate-reverse",
-        "glitch-before":
-          "glitch var(--before-duration) infinite linear alternate-reverse",
         "star-movement-bottom":
           "star-movement-bottom linear infinite alternate",
         "star-movement-top": "star-movement-top linear infinite alternate",

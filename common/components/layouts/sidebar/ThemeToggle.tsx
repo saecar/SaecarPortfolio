@@ -26,6 +26,7 @@ const ThemeToggle = () => {
         />
 
         <motion.button
+          aria-label="Switch to light mode"
           className="relative z-10 flex h-8 w-8 items-center justify-center transition duration-200"
           onClick={() => setTheme("light")}
           whileHover={{ scale: 1.15 }}
@@ -42,6 +43,7 @@ const ThemeToggle = () => {
         </motion.button>
 
         <motion.button
+          aria-label="Switch to dark mode"
           className="relative z-10 flex h-8 w-8 items-center justify-center transition duration-200"
           onClick={() => setTheme("dark")}
           whileHover={{ scale: 1.15 }}
@@ -59,6 +61,7 @@ const ThemeToggle = () => {
       </div>
 
       <button
+        aria-label={isLightMode ? "Switch to dark mode" : "Switch to light mode"}
         className="flex items-center gap-2 rounded-full border-[1.5px] border-neutral-300 bg-neutral-100 p-1 transition duration-200 hover:scale-110 dark:border-neutral-700 dark:bg-neutral-800 lg:hidden"
         onClick={() => setTheme(isLightMode ? "dark" : "light")}
       >

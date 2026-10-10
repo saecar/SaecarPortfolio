@@ -113,7 +113,12 @@ const Projects = ({ initialData }: ProjectsProps) => {
       </div>
 
       {filteredProjects.length === 0 ? (
-        <EmptyState message={t("no_data")} />
+        <EmptyState
+          title={t("no_data")}
+          message="No projects found under this category."
+          actionText="Clear Filter"
+          onActionClick={() => setSelectedCategory("all")}
+        />
       ) : (
         <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <AnimatePresence mode="popLayout">
