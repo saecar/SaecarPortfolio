@@ -587,7 +587,10 @@ Catatan Penting:
 
     // Sanitasi: strip wrapping ```markdown or ```
     text = text.replace(/^```markdown\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/g, "");
-    let sanitized = text.replace(/<script[\s\S]*?<\/script>/gi, "");
+    let sanitized = text
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/\bon\w+\s*=\s*(['"]).*?\1/gi, "")
+      .replace(/javascript:[^\s)'"]*/gi, "#");
     // Ensure all <img> tags are valid self-closing JSX
     sanitized = sanitized.replace(/<img([^>]*?)(?<!\/)>/gi, "<img$1 />");
 

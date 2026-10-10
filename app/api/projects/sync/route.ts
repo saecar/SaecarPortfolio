@@ -20,8 +20,16 @@ function sanitizeSlug(slug: string): string {
   return clean;
 }
 
+import { checkRateLimit, createRateLimitResponse, getClientIp } from "@/common/libs/rate-limit";
+
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request);
+    const rateCheck = checkRateLimit(`sync_${ip}`, { limit: 10, windowMs: 60000 });
+    if (!rateCheck.success) {
+      return createRateLimitResponse(rateCheck.reset);
+    }
+
     const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
     const syncSecret = process.env.SYNC_SECRET;
 

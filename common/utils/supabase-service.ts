@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 // Service-role client — server only. Bypasses RLS.
 // Requires SUPABASE_SERVICE_ROLE_KEY. Never import in client components.
 export const createServiceClient = () => {
+  if (process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Security Alert: SUPABASE_SERVICE_ROLE_KEY is leaked to public NEXT_PUBLIC_ environment!");
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

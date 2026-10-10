@@ -6,6 +6,16 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
 });
 
+const cspHeader = `
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is https://vercel.live;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com;
+  img-src 'self' data: blob: https: https://*.supabase.co https://avatars.githubusercontent.com;
+  connect-src 'self' https://*.supabase.co https://cloud.umami.is https://api.github.com https://vitals.vercel-insights.com;
+  frame-ancestors 'none';
+`.replace(/\s{2,}/g, ' ').trim();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   compress: true,
@@ -38,8 +48,28 @@ const nextConfig = {
       source: "/:path*",
       headers: [
         {
+          key: "Content-Security-Policy",
+          value: cspHeader,
+        },
+        {
+          key: "X-Frame-Options",
+          value: "DENY",
+        },
+        {
+          key: "X-Content-Type-Options",
+          value: "nosniff",
+        },
+        {
+          key: "Referrer-Policy",
+          value: "strict-origin-when-cross-origin",
+        },
+        {
           key: "Permissions-Policy",
-          value: "interest-cohort=()",
+          value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+        },
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=63072000; includeSubDomains; preload",
         },
       ],
     },

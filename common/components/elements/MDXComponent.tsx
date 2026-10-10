@@ -25,13 +25,21 @@ const MDXComponent = ({ children }: MarkdownRendererProps) => {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        a: (props) => (
-          <a
-            className="cursor-pointer text-teal-600 hover:text-teal-400 hover:underline"
-            target="_blank"
-            {...props}
-          />
-        ),
+        a: ({ href, children, ...props }) => {
+          const safeHref =
+            href && /^(https?:\/\/|mailto:|\/)/i.test(href) ? href : "#";
+          return (
+            <a
+              href={safeHref}
+              className="cursor-pointer text-teal-600 hover:text-teal-400 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+              {...props}
+            >
+              {children}
+            </a>
+          );
+        },
         p: (props) => <div {...props} className="font-sans" />,
         h2: (props) => (
           <h2
