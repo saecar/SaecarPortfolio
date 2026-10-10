@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import DOMPurify from "isomorphic-dompurify";
 import { checkRateLimit, createRateLimitResponse, getClientIp } from "@/common/libs/rate-limit";
+import { generateRequestId, logger } from "@/common/libs/logger";
 
 const chatSchema = z.object({
   message: z.string().min(1, "Message cannot be empty").max(1000, "Message too long"),

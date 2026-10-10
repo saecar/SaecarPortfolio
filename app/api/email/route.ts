@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import DOMPurify from "isomorphic-dompurify";
 import { checkRateLimit, createRateLimitResponse, getClientIp } from "@/common/libs/rate-limit";
+import { apiError, apiSuccess, logger } from "@/common/libs/logger";
 
 const emailSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
@@ -79,15 +80,10 @@ export const POST = async (request: Request) => {
       html: htmlTemplate,
     });
 
-    return NextResponse.json(
-      { success: true, message: "Email berhasil dikirim!" },
-      { status: 200 },
-    );
+    logger.info(`Contact email sent from ${email}`);
+    return apiSuccess({ message: "Email berhasil dikirim!" });
   } catch (error: any) {
-    console.error("Nodemailer Error:", error);
-    return NextResponse.json(
-      { success: false, message: "Gagal mengirim email", error: error.message },
-      { status: 500 },
-    );
+    logger.error("Nodemailer error sending email", error);
+    return apiError("Gagal mengirim email", "EMAIL_SEND_FAILED", 500);
   }
 };

@@ -54,7 +54,7 @@ const getProjectDetail = cache(async (slug: string): Promise<ProjectItem | null>
     title: project?.title || content?.frontMatter?.title || slug,
     description: project?.description || content?.frontMatter?.description || "",
     slug,
-    content: content?.content,
+    content: (project?.content && project.content.trim().length > 0) ? project.content : content?.content || null,
   };
 
   return JSON.parse(JSON.stringify(response));
@@ -65,6 +65,7 @@ export const generateMetadata = async ({
 }: ProjectDetailPageProps): Promise<Metadata> => {
   const project = await getProjectDetail(params?.slug);
   const locale = params.locale || "en";
+  const baseUrl = (process.env.DOMAIN || "https://satriabahari.my.id").replace(/\/+$/, "");
 
   if (!project || !project.title) {
     return {
@@ -72,20 +73,37 @@ export const generateMetadata = async ({
     };
   }
 
+  const imageUrl = project.image?.startsWith("http")
+    ? project.image
+    : `${baseUrl}${project.image?.startsWith("/") ? "" : "/"}${project.image || "/images/me.png"}`;
+
   return {
     title: `${project.title} ${METADATA.exTitle}`,
     description: project.description,
     openGraph: {
-      images: project.image,
-      url: `${METADATA.openGraph.url}/${project.slug}`,
+      images: [
+        {
+          url: imageUrl,
+          width: 1200,
+          height: 630,
+          alt: project.title,
+        },
+      ],
+      url: `${baseUrl}/${locale}/projects/${project.slug}`,
       siteName: METADATA.openGraph.siteName,
       locale: locale === "id" ? "id_ID" : "en_US",
       type: "article",
       authors: [METADATA.creator],
     },
+    twitter: {
+      card: "summary_large_image",
+      title: `${project.title} ${METADATA.exTitle}`,
+      description: project.description,
+      images: [imageUrl],
+    },
     keywords: project.title,
     alternates: {
-      canonical: `${process.env.DOMAIN}/${locale}/projects/${params.slug}`,
+      canonical: `${baseUrl}/${locale}/projects/${params.slug}`,
     },
   };
 };
@@ -97,8 +115,29 @@ const ProjectDetailPage = async ({ params }: ProjectDetailPageProps) => {
     notFound();
   }
 
+  const baseUrl = (process.env.DOMAIN || "https://satriabahari.my.id").replace(/\/+$/, "");
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: data.title,
+    description: data.description,
+    applicationCategory: data.category || "WebApplication",
+    operatingSystem: "Web",
+    author: {
+      "@type": "Person",
+      name: METADATA.creator,
+      url: baseUrl,
+    },
+    url: `${baseUrl}/${params.locale}/projects/${data.slug}`,
+    image: data.image,
+  };
+
   return (
     <Container data-aos="fade-up">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <BackButton url="/projects" />
       <PageHeading title={data.title} description={data.description} />
       <ProjectDetail {...data} />

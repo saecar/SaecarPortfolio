@@ -117,6 +117,7 @@ export async function POST(request: Request) {
       title: repoName,
       description,
       stacks: payload.stacks || [],
+      content: readme,
       is_show: true,
     };
     const fullRow: Record<string, unknown> = {

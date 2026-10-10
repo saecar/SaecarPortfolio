@@ -12,7 +12,9 @@
     "create:project": "bun run scripts/create-project.ts",
     "gui": "bun run scripts/automation-gui.ts",
     "analyze": "cross-env ANALYZE=true next build || set ANALYZE=true && next build",
-    "generate:blur": "bun run scripts/generate-blur.ts"
+    "generate:blur": "bun run scripts/generate-blur.ts",
+    "backup": "bun run scripts/backup-supabase.ts",
+    "backup:restore": "bun run scripts/backup-supabase.ts --restore"
   },
   "dependencies": {
     "@supabase/ssr": "^0.4.0",
