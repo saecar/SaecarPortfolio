@@ -1,12 +1,13 @@
 # parking-system
 
-> Sistem parkir otomatis berbasis IoT yang mengintegrasikan teknologi RFID/NFC, mikrokontroler, dan aktuator servo untuk manajemen akses kendaraan yang aman, efisien, dan real-time.
+> Sistem parkir otomatis berbasis IoT menggunakan Arduino Uno dan modul NFC untuk manajemen akses gerbang yang aman, efisien, dan real-time.
 
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Category: IoT](https://img.shields.io/badge/Category-IoT-blue.svg)](https://github.com/topics/iot)
-[![GitHub Topics](https://img.shields.io/badge/Topics-arduinouno%20%7C%20nfc%20%7C%20servo-informational)](https://github.com/saecar/parking-system)
+[![Arduino: Uno](https://img.shields.io/badge/Arduino-Uno-orange.svg)](https://www.arduino.cc/)
+[![Topics: NFC](https://img.shields.io/badge/Module-NFC%20V3-green.svg)](https://github.com/saecar/parking-system)
 
 </div>
 
@@ -14,24 +15,25 @@
 
 ## 🌟 Fitur Utama
 
-- 💳 **Autentikasi Kartu Tanpa Kontak (NFC)**: Validasi akses keluar-masuk kendaraan secara cepat menggunakan modul NFC V3 berbasis UID.
-- 🚧 **Kontrol Palang Otomatis**: Integrasi *servo motor* presisi tinggi untuk membuka dan menutup gerbang parkir secara otomatis setelah kartu terverifikasi.
-- 📟 **Informasi Visual Real-Time**: Layar LCD (I2C/Parallel) menampilkan status sistem, sisa slot, dan pesan sambutan/peringatan secara langsung.
-- 🔄 **Sistem Pemantauan IoT**: Sinkronisasi data status parkir dan log akses kendaraan ke server cloud atau lokal via modul komunikasi.
+- 💳 **Autentikasi Kartu NFC:** Validasi akses masuk dan keluar menggunakan teknologi RFID/NFC (Modul NFC V3) dengan tingkat keamanan tinggi.
+- 🚧 **Kontrol Otomatis Palang Parkir:** Mekanisme penggerak berbasis Servo Motor yang membuka dan menutup gerbang secara otomatis saat kartu terverifikasi.
+- 📺 **Informasi Real-Time LCD:** Menampilkan status sistem, sisa slot parkir, dan pesan sapaan/peringatan secara langsung melalui layar LCD 16x2 I2C.
+- 🔄 **Sistem Terintegrasi IoT:** Memantau status ketersediaan lahan parkir dan log transaksi akses melalui konektivitas jaringan mikrokontroler.
 
 ---
 
 ## 🛠 Tech Stack & Komponen
 
-### Bill of Materials (BoM)
-| Komponen Hardware | Jumlah | Fungsi Utama |
+### Bill of Materials (BoM) / Daftar Komponen Hardware
+
+| Komponen | Jumlah | Keterangan / Fungsi |
 | :--- | :---: | :--- |
-| Arduino Uno (ATmega328P) | 1 | Mikrokontroler utama pengolah logika sistem |
-| Modul NFC V3 (PN532 / RC522) | 1 | Pembaca kartu/tag RFID/NFC |
-| Motor Servo SG90 / MG996R | 1 | Aktuator penggerak palang pintu parkir |
-| Modul LCD 16x2 (dengan I2C) | 1 | Display informasi teks antarmuka pengguna |
-| Breadboard & Kabel Jumper | Secukupnya | Media penghubung rangkaian elektronika |
-| Power Supply / Adaptor 5V | 1 | Sumber daya stabil untuk sistem mikrokontroler dan servo |
+| **Arduino Uno (ATmega328P)** | 1 pcs | Mikrokontroler utama pengolah logika sistem |
+| **Modul NFC V3 (PN532 / RFID)** | 1 pcs | Pembaca kartu akses (Smart Card Reader) |
+| **Servo Motor (SG90 / MG996R)** | 1 pcs | Penggerak mekanis palang pintu parkir |
+| **LCD 16x2 with I2C Module** | 1 pcs | Display antarmuka informasi visual |
+| **Breadboard & Kabel Jumper** | Secukupnya | Media penghubung rangkaian elektronik |
+| **Power Supply / Adaptor 5V** | 1 pcs | Sumber daya stabil untuk aktuator dan modul |
 
 ---
 
@@ -41,126 +43,118 @@
 
 ```mermaid
 graph LR
-    subgraph MCU["Arduino Uno"]
-        ARD_5V["5V / VCC"]
-        ARD_GND["GND"]
-        ARD_SCL["A5 (SCL)"]
-        ARD_SDA["A4 (SDA)"]
-        ARD_D9["Pin D9 (PWM)"]
-        ARD_D10["Pin D10 (SS)"]
-        ARD_D13["Pin D13 (SCK)"]
-        ARD_D11["Pin D11 (MOSI)"]
-        ARD_D12["Pin D12 (MISO)"]
+    subgraph MCU["Arduino Uno (Mikrokontroler)"]
+      MCU_5V["5V / VCC"]
+      MCU_GND["GND (Ground)"]
+      MCU_SDA["A4 (SDA)"]
+      MCU_SCL["A5 (SCL)"]
+      MCU_SPI_SS["Pin 10 (SS/SDA)"]
+      MCU_SPI_SCK["Pin 13 (SCK)"]
+      MCU_SPI_MOSI["Pin 11 (MOSI)"]
+      MCU_SPI_MISO["Pin 12 (MISO)"]
+      MCU_PWM["Pin 9 (PWM)"]
     end
 
-    subgraph NFC["NFC Module V3"]
-        NFC_VCC["VCC"]
-        NFC_GND["GND"]
-        NFC_SCK["SCK"]
-        NFC_MISO["MISO"]
-        NFC_MOSI["MOSI"]
-        NFC_SS["SS / SDA"]
+    subgraph NFC["Modul NFC V3"]
+      NFC_VCC["VCC"]
+      NFC_GND["GND"]
+      NFC_SCK["SCK"]
+      NFC_MISO["MISO"]
+      NFC_MOSI["MOSI"]
+      NFC_SS["SS / SDA"]
     end
 
-    subgraph LCD["LCD 16x2 I2C"]
-        LCD_VCC["VCC"]
-        LCD_GND["GND"]
-        LCD_SDA["SDA"]
-        LCD_SCL["SCL"]
+    subgraph LCD["LCD 16x2 (I2C)"]
+      LCD_VCC["VCC"]
+      LCD_GND["GND"]
+      LCD_SDA["SDA"]
+      LCD_SCL["SCL"]
     end
 
     subgraph Servo["Servo Motor"]
-        SERVO_VCC["VCC (Red)"]
-        SERVO_GND["GND (Brown)"]
-        SERVO_SIG["PWM (Orange)"]
+      SERVO_VCC["VCC (Red)"]
+      SERVO_GND["GND (Brown)"]
+      SERVO_PWM["Signal (Orange)"]
     end
 
-    ARD_5V --> NFC_VCC
-    ARD_5V --> LCD_VCC
-    ARD_5V --> SERVO_VCC
-    
-    ARD_GND --> NFC_GND
-    ARD_GND --> LCD_GND
-    ARD_GND --> SERVO_GND
+    MCU_5V --> NFC_VCC
+    MCU_5V --> LCD_VCC
+    MCU_5V --> SERVO_VCC
 
-    ARD_SCL --> LCD_SCL
-    ARD_SDA --> LCD_SDA
+    MCU_GND --> NFC_GND
+    MCU_GND --> LCD_GND
+    MCU_GND --> SERVO_GND
 
-    ARD_D9 --> SERVO_SIG
-    ARD_D10 --> NFC_SS
-    ARD_D13 --> NFC_SCK
-    ARD_D11 --> NFC_MOSI
-    ARD_D12 --> NFC_MISO
+    MCU_SDA --> LCD_SDA
+    MCU_SCL --> LCD_SCL
+
+    MCU_SPI_SCK --> NFC_SCK
+    MCU_SPI_MISO --> NFC_MISO
+    MCU_SPI_MOSI --> NFC_MOSI
+    MCU_SPI_SS --> NFC_SS
+
+    MCU_PWM --> SERVO_PWM
 ```
 
-### Tabel Pinout & Pengkabelan Lengkap
+### Tabel Pinout Lengkap
 
-| Komponen / Sensor | Pin pada Modul | Pin Mikrokontroler (Arduino Uno) | Level Tegangan | Keterangan / Fungsi |
+| Komponen / Sensor | Pin pada Modul | Pin Arduino Uno | Level Tegangan | Keterangan / Fungsi |
 | :--- | :--- | :--- | :--- | :--- |
-| **NFC Module V3** | VCC | 5V | 5V | Catu daya modul |
+| **Modul NFC V3** | VCC | 5V | 5V | Catu daya modul NFC |
 | | GND | GND | 0V | Ground bersama |
-| | SCK | Pin 13 | 5V / 3.3V | Serial Clock SPI |
-| | MISO | Pin 12 | 5V / 3.3V | Master In Slave Out SPI |
-| | MOSI | Pin 11 | 5V / 3.3V | Master Out Slave In SPI |
-| | SS / SDA | Pin 10 | 5V / 3.3V | Slave Select SPI |
-| **LCD 16x2 I2C** | VCC | 5V | 5V | Catu daya modul LCD |
+| | SCK | Pin 13 | 5V | SPI Serial Clock |
+| | MISO | Pin 12 | 5V | SPI Master In Slave Out |
+| | MOSI | Pin 11 | 5V | SPI Master Out Slave In |
+| | SS / SDA | Pin 10 | 5V | SPI Slave Select |
+| **LCD 16x2 (I2C)** | VCC | 5V | 5V | Catu daya modul I2C LCD |
 | | GND | GND | 0V | Ground bersama |
-| | SDA | Pin A4 (SDA) | 5V | Jalur Data I2C |
-| | SCL | Pin A5 (SCL) | 5V | Jalur Clock I2C |
-| **Motor Servo** | VCC (Merah) | External 5V / 5V Vin | 5V | Catu daya motor servo |
-| | GND (Cokelat) | GND | 0V | Ground bersama |
-| | PWM (Oranye) | Pin 9 | 5V (PWM) | Kontrol sudut posisi palang |
+| | SDA | Pin A4 | 5V | I2C Data Line |
+| | SCL | Pin A5 | 5V | I2C Clock Line |
+| **Servo Motor** | VCC (Merah) | 5V | 5V | Daya motor servo |
+| | GND (Cokelat)| GND | 0V | Ground motor servo |
+| | Signal (Jingga)| Pin 9 | 5V (PWM) | Kontrol sudut putar palang |
 
 ---
 
 ## 🚀 Cara Pemasangan & Persiapan
 
-Ikuti langkah-langkah di bawah ini untuk menyiapkan lingkungan pengembangan (*development environment*) dan mengunggah kode sumber ke mikrokontroler.
+Ikuti langkah-langkah di bawah ini untuk menyiapkan lingkungan pengembangan dan mengunggah *firmware* ke Arduino Uno.
 
-### 1. Kloning Repositori
-Buka terminal atau command prompt Anda, lalu jalankan perintah berikut:
+### 1. Kloning Repository
+Buka terminal/command prompt Anda, lalu jalankan perintah berikut:
 ```bash
 git clone https://github.com/saecar/parking-system.git
 cd parking-system
 ```
 
-### 2. Membuka Proyek
-Anda dapat menggunakan **PlatformIO (VS Code)** atau **Arduino IDE**. 
+### 2. Instalasi Dependensi & Library
+Pastikan Anda menggunakan **PlatformIO** (di dalam VS Code) atau **Arduino IDE**. Proyek ini membutuhkan beberapa library eksternal berikut:
+- `Adafruit PN532` (untuk modul NFC V3)
+- `LiquidCrystal_I2C` (untuk kontrol LCD I2C)
+- `Servo` (bawaan Arduino IDE)
 
-#### Opsi A: Menggunakan PlatformIO (Direkomendasikan)
-1. Buka aplikasi *Visual Studio Code*.
-2. Install ekstensi **PlatformIO IDE** melalui menu Extensions.
-3. Buka folder `parking-system` melalui `File > Open Folder...`.
-4. PlatformIO akan otomatis membaca konfigurasi `platformio.ini` dan mendownload dependensi library yang dibutuhkan.
+Jika menggunakan PlatformIO, dependensi akan diunduh secara otomatis melalui file `platformio.ini`.
 
-#### Opsi B: Menggunakan Arduino IDE
-1. Buka aplikasi *Arduino IDE*.
-2. Buka file utama proyek `src/parking-system.ino` (atau buat file baru dan salin kode dari repositori).
-3. Install library berikut melalui *Library Manager* (`Ctrl+Shift+P` / *Tools > Manage Libraries*):
-   - `Servo` (bawaan Arduino)
-   - `LiquidCrystal_I2C` oleh Frank de Brabander
-   - `Adafruit PN532` atau library yang kompatibel dengan *NFC Module V3*.
-
-### 3. Kompilasi dan Upload Firmware
-
-#### Menggunakan PlatformIO CLI:
+### 3. Kompilasi & Unggah Firmware (PlatformIO CLI)
+Hubungkan Arduino Uno ke komputer menggunakan kabel USB, lalu jalankan perintah berikut:
 ```bash
-# Melakukan kompilasi kode (Build)
+# Membangun (compile) proyek
 pio run
 
-# Mengunggah firmware ke Arduino Uno (Upload)
+# Mengunggah firmware ke Arduino Uno
 pio run -t upload
 
-# Membuka Serial Monitor untuk memantau log sistem (Baud rate: 115200)
+# Membuka Serial Monitor untuk debugging (Baud Rate: 115200)
 pio device monitor -b 115200
 ```
 
-#### Menggunakan Arduino IDE:
-1. Hubungkan Arduino Uno ke komputer menggunakan kabel USB.
-2. Pilih tipe board: **Tools > Board > Arduino AVR Boards > Arduino Uno**.
-3. Pilih port serial yang sesuai pada menu **Tools > Port**.
-4. Klik tombol **Upload** (ikon panah kanan) pada jendela Arduino IDE.
-5. Buka **Serial Monitor** (ikon kaca pembesar di pojok kanan atas) dan atur *baud rate* ke `115200`.
+### 4. Konfigurasi Sistem Cloud / IoT (Opsional)
+Jika Anda menghubungkan sistem ini ke server lokal atau cloud MQTT, sesuaikan parameter kredensial jaringan pada file konfigurasi utama (misal: `src/config.h`):
+```cpp
+#define WIFI_SSID "Nama_WiFi_Anda"
+#define WIFI_PASSWORD "Password_WiFi_Anda"
+#define MQTT_BROKER "broker.hivemq.com"
+```
 
 ---
 
@@ -169,28 +163,28 @@ pio device monitor -b 115200
 ```text
 parking-system/
 ├── .github/
-│   └── workflows/          # Konfigurasi CI/CD (jika ada)
-├── include/                # File header tambahan (jika ada)
-├── lib/                    # Library kustom eksternal
+│   └── workflows/        # Konfigurasi CI/CD GitHub Actions
+├── include/              # File header kustom
+├── lib/                  # Library lokal tambahan
 ├── src/
-│   └── main.cpp            # Kode sumber utama mikrokontroler (Firmware)
-├── test/                   # File pengujian unit / integrasi hardware
-├── platformio.ini          # Konfigurasi workspace PlatformIO
-└── README.md               # Dokumentasi proyek
+│   └── main.cpp          # Kode sumber utama program Arduino
+├── test/                 # Pengujian unit otomatis
+├── platformio.ini        # Konfigurasi project PlatformIO
+└── README.md             # Dokumentasi proyek resmi
 ```
 
 ---
 
 ## 💡 Tips Troubleshooting Hardware
 
-- **Layar LCD Tidak Menampilkan Teks**: Periksa kembali alamat I2C modul LCD Anda (umumnya `0x27` atau `0x3F`). Anda dapat menjalankan skrip *I2C Scanner* untuk mendeteksi alamat yang benar.
-- **Motor Servo Bergetar atau Tidak Bergerak**: Pastikan suplai daya eksternal 5V untuk servo terpisah atau memiliki kapasitas arus yang memadai (minimal 1A-2A), karena pin 5V Arduino sering kali tidak cukup kuat untuk menyuplai beban motor servo secara optimal.
-- **Modul NFC Tidak Mendeteksi Kartu**: Periksa kembali jalur komunikasi SPI (SCK, MISO, MOSI, SS) dan pastikan level tegangan logika sudah sesuai (kebanyakan modul bekerja di 3.3V namun toleran terhadap 5V, atau gunakan *logic level converter* jika diperlukan).
+- **LCD Menyala Tapi Karakter Tidak Muncul:** Putar potensiometer kecil yang berada di belakang modul I2C LCD untuk mengatur kontras layar.
+- **Modul NFC Tidak Terdeteksi:** Periksa kembali jalur komunikasi SPI (Pin 10, 11, 12, 13). Pastikan kabel jumper tidak longgar dan catu daya 5V stabil.
+- **Servo Bergerak Tersendat-sendat:** Kekuatan arus dari port USB komputer terkadang tidak mencukupi untuk motor servo. Gunakan catu daya eksternal 5V yang memiliki ground yang sama (*Common Ground*) dengan Arduino Uno.
 
 ---
 
 ## 🤝 Kontribusi & Lisensi
 
-Kontribusi, *issue*, dan *pull request* sangat diterima dengan terbuka! Jika Anda memiliki saran untuk meningkatkan sistem parkir ini, silakan buat *issue* baru atau ajukan *pull request*.
+Kontribusi, isu, dan *pull request* sangat diterima! Untuk perubahan besar, harap buka *issue* terlebih dahulu untuk mendiskusikan apa yang ingin Anda ubah.
 
-Proyek ini dilisensikan di bawah lisensi **MIT** - lihat file [LICENSE](LICENSE) untuk detail lebih lanjut.
+Proyek ini dirilis di bawah lisensi [MIT](LICENSE). Silakan gunakan, ubah, dan distribusikan sesuai kebutuhan Anda.
